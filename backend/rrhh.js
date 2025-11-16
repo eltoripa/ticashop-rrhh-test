@@ -314,4 +314,115 @@ router.get("/empleado/:id/vacaciones", (req, res) => {
   );
 });
 
+
+
+// ===============================================
+// GENERAR LIQUIDACIONES AUTOMÁTICAS DESDE VENTAS
+// ===============================================
+
+router.post("/generar-liquidaciones", (req, res) => {
+
+  const sql = `
+    INSERT INTO liquidaciones (
+        id_empleado, 
+        empleado, 
+        sueldo_base, 
+        total_ventas, 
+        comision, 
+        total_bruto, 
+        total_liquido, 
+        tipo_liquidacion, 
+        fecha
+    )
+    SELECT 
+        e.id_empleado,
+        u.nombre AS empleado,
+        e.sueldo_base,
+        SUM(v.monto) AS total_ventas,
+        CASE 
+            WHEN SUM(v.monto) <= (
+                SELECT rango_max FROM reglas_comision WHERE id_regla = 1
+            ) THEN SUM(v.monto) * (
+                SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 1
+            )
+            ELSE SUM(v.monto) * (
+                SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 2
+            )
+        END AS comision,
+        e.sueldo_base +
+            CASE 
+                WHEN SUM(v.monto) <= (
+                    SELECT rango_max FROM reglas_comision WHERE id_regla = 1
+                ) THEN SUM(v.monto) * (
+                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 1
+                )
+                ELSE SUM(v.monto) * (
+                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 2
+                )
+            END AS total_bruto,
+        e.sueldo_base +
+            CASE 
+                WHEN SUM(v.monto) <= (
+                    SELECT rango_max FROM reglas_comision WHERE id_regla = 1
+                ) THEN SUM(v.monto) * (
+                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 1
+                )
+                ELSE SUM(v.monto) * (
+                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 2
+                )
+            END AS total_liquido,
+        'vendedor',
+        CURDATE()
+    FROM empleados e
+    JOIN usuarios u ON u.id = e.usuario_id
+    JOIN ventas v ON e.id_empleado = v.id_empleado
+    WHERE e.tipo_vendedor IS NOT NULL
+    GROUP BY e.id_empleado;
+  `;
+
+  db.query(sql, (err, result) => {
+    if (err) {
+      console.error("Error generando liquidaciones:", err);
+      return res.status(500).json({ error: "Ocurrió un error al generar las liquidaciones." });
+    }
+
+    return res.status(200).json({
+      message: "Liquidaciones generadas correctamente desde ventas."
+    });
+  });
+});
+
+
+// ===========================================
+// OBTENER TODAS LAS LIQUIDACIONES
+// ===========================================
+
+router.get("/liquidaciones", (req, res) => {
+
+  const sql = `
+    SELECT 
+      id, 
+      empleado, 
+      tipo_liquidacion, 
+      sueldo_base, 
+      total_ventas, 
+      comision, 
+      total_liquido, 
+      fecha
+    FROM liquidaciones
+    ORDER BY fecha DESC
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("Error obteniendo liquidaciones:", err);
+      return res.status(500).json(err);
+    }
+
+    res.json(results);
+  });
+});
+
+
+
 module.exports = router;

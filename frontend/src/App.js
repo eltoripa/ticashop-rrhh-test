@@ -18,7 +18,7 @@ export default function App() {
     setUsuario(null);
   };
 
-  // 🔹 Determina qué vista mostrar según el rol
+  //  Determina qué vista mostrar según el rol
 const renderizarVistaPorRol = () => {
   switch (usuario.rol) {
     case "admin":
@@ -40,7 +40,7 @@ const renderizarVistaPorRol = () => {
         </div>
       );
     default:
-      // 👇 Todos los otros roles (vendedor, soporte, etc.) se tratan como empleados normales
+      //  Todos los otros roles (vendedor, soporte, etc.) se tratan como empleados normales
       return <PanelEmpleado usuario={usuario} />;
   }
 };
