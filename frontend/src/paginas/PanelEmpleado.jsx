@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import MarcarAsistencia from "../componentes/MarcarAsistencia";
 
 export default function PanelEmpleado({ usuario }) {
   const [liquidaciones, setLiquidaciones] = useState([]);
@@ -10,7 +11,7 @@ export default function PanelEmpleado({ usuario }) {
     fecha_fin: ""
   });
 
-  // ✅ Cargar datos personales, liquidaciones y vacaciones
+  //  Cargar datos personales, liquidaciones y vacaciones
   useEffect(() => {
     if (!usuario) return;
 
@@ -28,7 +29,7 @@ export default function PanelEmpleado({ usuario }) {
     cargarDatos();
   }, [usuario]);
 
-  // 🖊️ Firmar digitalmente una liquidación
+  //  Firmar digitalmente una liquidación
   const firmarLiquidacion = async (idLiquidacion) => {
     try {
       const res = await axios.put(`http://localhost:3001/rrhh/firmar/${idLiquidacion}`, {
@@ -41,7 +42,7 @@ export default function PanelEmpleado({ usuario }) {
     }
   };
 
-  // 🌴 Enviar solicitud de vacaciones
+  //  Enviar solicitud de vacaciones
   const enviarVacaciones = async () => {
     try {
       await axios.post(`http://localhost:3001/rrhh/empleado/${usuario.id}/vacaciones`, {
@@ -59,10 +60,14 @@ export default function PanelEmpleado({ usuario }) {
   return (
     <div style={{ padding: "30px" }}>
       <h1>Portal del Empleado</h1>
+      <section>
+  <MarcarAsistencia usuario={usuario} />
+</section>
+
       <p>Bienvenido, <b>{usuario.nombre}</b> ({usuario.email})</p>
 
       <section style={{ marginTop: "20px" }}>
-        <h2>📄 Mis Liquidaciones</h2>
+        <h2> Mis Liquidaciones</h2>
         {liquidaciones.length === 0 ? (
           <p>No tienes liquidaciones registradas.</p>
         ) : (
@@ -98,7 +103,7 @@ export default function PanelEmpleado({ usuario }) {
       <hr />
 
       <section>
-        <h2>🌴 Solicitar Vacaciones</h2>
+        <h2> Solicitar Vacaciones</h2>
         <label>Desde: </label>
         <input
           type="date"
@@ -117,7 +122,7 @@ export default function PanelEmpleado({ usuario }) {
       <hr />
 
       <section>
-        <h2>🕒 Mis Vacaciones</h2>
+        <h2> Mis Vacaciones</h2>
         {vacaciones.length === 0 ? (
           <p>No tienes solicitudes.</p>
         ) : (

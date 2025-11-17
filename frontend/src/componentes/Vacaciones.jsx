@@ -17,13 +17,13 @@ export default function Vacaciones({ usuario }) {
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
       });
-      setMensaje("✅ Solicitud enviada correctamente");
+      setMensaje(" Solicitud enviada correctamente");
       setFechaInicio("");
       setFechaFin("");
       cargarSolicitudes();
     } catch (error) {
       console.error(error);
-      setMensaje("❌ Error al enviar solicitud");
+      setMensaje(" Error al enviar solicitud");
     }
   };
 
@@ -40,7 +40,7 @@ const cargarSolicitudes = useCallback(async () => {
   } catch (error) {
     console.error("Error al cargar solicitudes:", error);
   }
-}, [usuario.rol, usuario.id]); // 👈 dependencias reales
+}, [usuario.rol, usuario.id]); //  dependencias reales
 
 
   // 🔹 Cambiar estado (solo RRHH)
@@ -60,7 +60,7 @@ useEffect(() => {
 
   return (
     <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "10px" }}>
-      <h3>🌴 Solicitud de Vacaciones</h3>
+      <h3> Solicitud de Vacaciones</h3>
 
       {/* Empleado solicita vacaciones */}
       {usuario.rol !== "rrhh" && (
@@ -112,7 +112,7 @@ useEffect(() => {
       {/* RRHH ve todas las solicitudes */}
       {usuario.rol === "rrhh" && (
         <div>
-          <h4>📋 Todas las solicitudes</h4>
+          <h4> Todas las solicitudes</h4>
           <table border="1" cellPadding="6" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>

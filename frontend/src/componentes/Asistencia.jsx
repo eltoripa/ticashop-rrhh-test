@@ -5,18 +5,18 @@ export default function Asistencia({ empleado, rol }) {
   const [mensaje, setMensaje] = useState("");
   const [asistencias, setAsistencias] = useState([]);
 
-  // 🔹 Registrar asistencia personal
+  //  Registrar asistencia personal
 const registrarAsistencia = async () => {
   try {
     const usuario = JSON.parse(localStorage.getItem("usuario"));
     await axios.post("http://localhost:3001/rrhh/asistencia", {
       usuario_id: usuario.id,
     });
-    setMensaje(`✅ Asistencia registrada correctamente para ${usuario.nombre}`);
+    setMensaje(` Asistencia registrada correctamente para ${usuario.nombre}`);
     cargarAsistencias();
   } catch (error) {
     console.error(error);
-    setMensaje("❌ Error al registrar asistencia");
+    setMensaje(" Error al registrar asistencia");
   }
 };
 
@@ -39,7 +39,7 @@ const registrarAsistencia = async () => {
 
   return (
     <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "10px" }}>
-      <h3>🕒 Registro de Asistencia</h3>
+      <h3> Registro de Asistencia</h3>
 
       {/* RRHH y empleados pueden marcar su asistencia */}
       <p><b>Empleado:</b> {empleado}</p>
@@ -49,7 +49,7 @@ const registrarAsistencia = async () => {
       {/* Solo RRHH ve la tabla completa */}
       {rol === "rrhh" && (
         <div style={{ marginTop: "20px" }}>
-          <h4>📋 Historial de Asistencias (Todos los empleados)</h4>
+          <h4> Historial de Asistencias (Todos los empleados)</h4>
           <table border="1" cellPadding="6" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>

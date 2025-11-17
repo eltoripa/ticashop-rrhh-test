@@ -20,31 +20,34 @@ export default function Liquidaciones({ usuario }) {
     }
   };
 
-  // Generar liquidación
-  const generarLiquidacion = async () => {
-    try {
-      await axios.post("http://localhost:3001/rrhh/liquidaciones", {
-        empleado: empleados.find(e => e.id === parseInt(empleadoId))?.nombre,
-        sueldo_base: parseFloat(sueldo),
-        bono: parseFloat(bono),
-        horas_extra: parseInt(horasExtra),
-        usuario_id: empleadoId,
-      });
-      setMensaje("✅ Liquidación generada correctamente");
-      cargarLiquidaciones();
-    } catch (error) {
-      console.error(error);
-      setMensaje("❌ Error al generar liquidación");
-    }
-  };
-
-  // Ver todas las liquidaciones
+  // Cargar todas las liquidaciones
   const cargarLiquidaciones = async () => {
     try {
       const res = await axios.get("http://localhost:3001/rrhh/liquidaciones");
       setLiquidaciones(res.data);
     } catch (error) {
       console.error("Error al cargar liquidaciones:", error);
+    }
+  };
+
+  // Generar liquidación manual
+  const generarLiquidacion = async () => {
+    try {
+      const empData = empleados.find(e => e.id === parseInt(empleadoId));
+
+      await axios.post("http://localhost:3001/rrhh/liquidaciones", {
+        usuario_id: empleadoId,           // obligatorio
+        empleado: empData?.nombre,        // nombre del empleado
+        sueldo_base: parseFloat(sueldo),
+        bono: parseFloat(bono),
+        horas_extra: parseInt(horasExtra),
+      });
+
+      setMensaje(" Liquidación generada correctamente");
+      cargarLiquidaciones();
+    } catch (error) {
+      console.error(error);
+      setMensaje(" Error al generar liquidación");
     }
   };
 
@@ -55,12 +58,17 @@ export default function Liquidaciones({ usuario }) {
 
   return (
     <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "10px" }}>
-      <h3>💵 Generar Liquidaciones</h3>
+
+      <h3> Generar Liquidaciones</h3>
 
       {usuario.rol === "rrhh" && (
-        <div>
+        <div style={{ marginBottom: "20px" }}>
           <label>Empleado:</label>
-          <select value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)}>
+          <select
+            value={empleadoId}
+            onChange={(e) => setEmpleadoId(e.target.value)}
+            style={{ marginLeft: "10px" }}
+          >
             <option value="">-- Seleccione --</option>
             {empleados.map((e) => (
               <option key={e.id} value={e.id}>
@@ -69,50 +77,68 @@ export default function Liquidaciones({ usuario }) {
             ))}
           </select>
 
-          <input
-            type="number"
-            placeholder="Sueldo base"
-            value={sueldo}
-            onChange={(e) => setSueldo(e.target.value)}
-          />
-          <input
-            type="number"
-            placeholder="Bono"
-            value={bono}
-            onChange={(e) => setBono(e.target.value)}
-          />
-          <input
-            type="number"
-            placeholder="Horas extra"
-            value={horasExtra}
-            onChange={(e) => setHorasExtra(e.target.value)}
-          />
-          <button onClick={generarLiquidacion}>Generar</button>
+          <div style={{ marginTop: "10px" }}>
+            <input
+              type="number"
+              placeholder="Sueldo base"
+              value={sueldo}
+              onChange={(e) => setSueldo(e.target.value)}
+            />
+            <input
+              type="number"
+              placeholder="Bono"
+              value={bono}
+              onChange={(e) => setBono(e.target.value)}
+            />
+            <input
+              type="number"
+              placeholder="Horas extra"
+              value={horasExtra}
+              onChange={(e) => setHorasExtra(e.target.value)}
+            />
+          </div>
+
+          <button onClick={generarLiquidacion} style={{ marginTop: "10px" }}>
+            Generar Liquidación
+          </button>
+
           <p>{mensaje}</p>
         </div>
       )}
 
       {/* Mostrar historial */}
       <div style={{ marginTop: "20px" }}>
-        <h4>📑 Historial de Liquidaciones</h4>
+        <h4> Historial de Liquidaciones</h4>
+
         <table border="1" cellPadding="6" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th>ID</th>
               <th>Empleado</th>
               <th>Sueldo Base</th>
+              <th>Asignación Familiar</th>
+              <th>Descuento Caja</th>
+              <th>Total Bruto</th>
+              <th>Total Descuentos</th>
               <th>Total Líquido</th>
+              <th>Fecha</th>
               <th>Firma Empleador</th>
             </tr>
           </thead>
+
           <tbody>
             {liquidaciones.map((l) => (
               <tr key={l.id}>
                 <td>{l.id}</td>
                 <td>{l.empleado}</td>
                 <td>${l.sueldo_base}</td>
+                <td>${l.asignacion_familiar}</td>
+                <td>${l.descuento_caja}</td>
+                <td>${l.total_bruto}</td>
+                <td>${l.total_descuentos}</td>
                 <td>${l.total_liquido}</td>
-                <td>{l.firma_empleador ? "✔️ Firmada" : "❌ Sin firma"}</td>
+                <td>{new Date(l.fecha).toLocaleDateString("es-CL")}</td>
+                <td>{l.firma_empleador ? "SI" : "NO"}</td>
               </tr>
             ))}
           </tbody>
@@ -121,3 +147,4 @@ export default function Liquidaciones({ usuario }) {
     </div>
   );
 }
+

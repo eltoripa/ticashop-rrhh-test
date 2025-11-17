@@ -1,113 +1,127 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-import RegistroEmpleado from "../componentes/RegistroEmpleado";
-
 
 export default function AdminPanel({ usuario }) {
-  const [productos, setProductos] = useState([]);
-  const [nuevoProducto, setNuevoProducto] = useState({
-    nombre: "",
-    stock: "",
-    precio: ""
-  });
+  const [nombre, setNombre] = useState("");
+  const [email, setEmail] = useState("");
+  const [contraseña, setContraseña] = useState("");
+  const [rol, setRol] = useState("empleado");
+  const [cargo, setCargo] = useState("");
+  const [sueldo, setSueldo] = useState("");
+  const [tipoContrato, setTipoContrato] = useState("");
+  const [tipoVendedor, setTipoVendedor] = useState("");
+  const [zona, setZona] = useState("");
+  const [tieneCarga, setTieneCarga] = useState(false);
+  const [mensaje, setMensaje] = useState("");
 
-  const cargarProductos = async () => {
+  const crearEmpleado = async () => {
     try {
-      const res = await axios.get("http://localhost:3001/productos");
-      setProductos(res.data);
+      await axios.post("http://localhost:3001/admin/crear-empleado", {
+        nombre,
+        email,
+        contraseña,
+        rol,
+        cargo,
+        sueldo_base: parseFloat(sueldo),
+        tipo_contrato: tipoContrato,
+        tipo_vendedor: rol === "vendedor" ? tipoVendedor : null,
+        zona: rol === "vendedor" ? zona : null,
+        tiene_carga: tieneCarga,
+        id_caja_compensacion: 1 // Caja Los Andes fija
+      });
+
+      setMensaje("Empleado creado correctamente");
+
+      // Limpiar campos
+      setNombre("");
+      setEmail("");
+      setContraseña("");
+      setCargo("");
+      setSueldo("");
+      setTipoContrato("");
+      setTipoVendedor("");
+      setZona("");
+      setTieneCarga(false);
+
     } catch (error) {
-      console.error("Error al obtener productos:", error);
-    }
-  };
-const cerrarSesion = () => {
-  localStorage.removeItem("usuario");
-  window.location.reload(); // o redirigir manualmente al login si tienes rutas
-};
-
-  useEffect(() => {
-    cargarProductos();
-  }, []);
-
-  const crearProducto = async () => {
-    if (!nuevoProducto.nombre || !nuevoProducto.stock || !nuevoProducto.precio) return;
-    try {
-      await axios.post("http://localhost:3001/productos", nuevoProducto);
-      setNuevoProducto({ nombre: "", stock: "", precio: "" });
-      cargarProductos();
-    } catch (error) {
-      console.error("Error al crear producto:", error);
-    }
-  };
-
-  const editarProducto = async (id) => {
-    const nombre = prompt("Nuevo nombre:");
-    const stock = prompt("Nuevo stock:");
-    const precio = prompt("Nuevo precio:");
-    if (!nombre || !stock || !precio) return;
-
-    try {
-      await axios.put(`http://localhost:3001/productos/${id}`, { nombre, stock, precio });
-      cargarProductos();
-    } catch (error) {
-      console.error("Error al editar:", error);
-    }
-  };
-
-  const eliminarProducto = async (id) => {
-    if (!window.confirm("¿Seguro que quieres eliminar este producto?")) return;
-    try {
-      await axios.delete(`http://localhost:3001/productos/${id}`);
-      setProductos(productos.filter(p => p.id !== id));
-    } catch (error) {
-      console.error("Error al eliminar:", error);
+      console.error(error);
+      setMensaje("Error al crear empleado");
     }
   };
 
   return (
-    <div>
-      <h2>Panel de Administración</h2>
-      <p>Bienvenido, {usuario.nombre}</p>
-      <button onClick={cerrarSesion}>Cerrar sesión</button>
+    <div style={{ padding: "30px" }}>
+      <h1>Panel de Administración</h1>
 
+      <h2>Registrar Empleado</h2>
 
-      {/* Formulario para crear producto */}
-      <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", maxWidth: "600px" }}>
+        
+        <input placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+
+        <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+
         <input
-          type="text"
-          placeholder="Nombre"
-          value={nuevoProducto.nombre}
-          onChange={(e) => setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })}
+          placeholder="Contraseña"
+          type="password"
+          value={contraseña}
+          onChange={(e) => setContraseña(e.target.value)}
         />
+
+        <select value={rol} onChange={(e) => setRol(e.target.value)}>
+            <option value="cliente">Empleado</option>
+            <option value="rrhh">RRHH</option>
+            <option value="vendedor">Vendedor</option>
+            <option value="admin">Admin</option>
+        </select>
+
+        <input placeholder="Cargo" value={cargo} onChange={(e) => setCargo(e.target.value)} />
+
         <input
           type="number"
-          placeholder="Stock"
-          value={nuevoProducto.stock}
-          onChange={(e) => setNuevoProducto({ ...nuevoProducto, stock: e.target.value })}
+          placeholder="Sueldo Base"
+          value={sueldo}
+          onChange={(e) => setSueldo(e.target.value)}
         />
-        <input
-          type="number"
-          placeholder="Precio"
-          value={nuevoProducto.precio}
-          onChange={(e) => setNuevoProducto({ ...nuevoProducto, precio: e.target.value })}
-        />
-        <button onClick={crearProducto}>Agregar</button>
+
+        <select value={tipoContrato} onChange={(e) => setTipoContrato(e.target.value)}>
+          <option value="">Tipo de contrato</option>
+          <option value="fijo">Fijo</option>
+          <option value="indefinido">Indefinido</option>
+          <option value="part-time">Part-time</option>
+        </select>
+
+        {rol === "vendedor" && (
+          <>
+            <select value={tipoVendedor} onChange={(e) => setTipoVendedor(e.target.value)}>
+              <option value="">Tipo de vendedor</option>
+              <option value="interno">Interno</option>
+              <option value="externo">Externo</option>
+            </select>
+
+            <input
+              placeholder="Zona"
+              value={zona}
+              onChange={(e) => setZona(e.target.value)}
+            />
+          </>
+        )}
+
+        <label>
+          <input
+            type="checkbox"
+            checked={tieneCarga}
+            onChange={(e) => setTieneCarga(e.target.checked)}
+          />
+          ¿Tiene carga familiar?
+        </label>
       </div>
 
-      {/* Sección para registrar empleados */}
-      <RegistroEmpleado />
-      
-      {/* Lista de productos */}
-      <ul>
-        {productos.map(p => (
-          <li key={p.id}>
-            {p.nombre} - Stock: {p.stock} - Precio: ${p.precio}
-            <button onClick={() => editarProducto(p.id)}>Editar</button>
-            <button onClick={() => eliminarProducto(p.id)}>Eliminar</button>
-          </li>
-        ))}
-      </ul>
-    </div>
-    
-  );
+      <button onClick={crearEmpleado} style={{ marginTop: "10px" }}>
+        Registrar Empleado
+      </button>
 
+      <p>{mensaje}</p>
+    </div>
+  );
 }

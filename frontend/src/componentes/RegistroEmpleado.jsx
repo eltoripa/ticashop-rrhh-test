@@ -16,15 +16,15 @@ export default function RegistroEmpleado() {
       });
 
       if (res.ok) {
-        setMensaje("✅ Usuario creado correctamente (cifrado con bcrypt)");
+        setMensaje(" Usuario creado correctamente (cifrado con bcrypt)");
         setNombre("");
         setEmail("");
         setPassword("");
       } else {
-        setMensaje("❌ Error al crear usuario");
+        setMensaje(" Error al crear usuario");
       }
     } catch (error) {
-      setMensaje("❌ Error de conexión con el servidor");
+      setMensaje(" Error de conexión con el servidor");
     }
   };
 

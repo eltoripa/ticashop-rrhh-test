@@ -3,124 +3,193 @@ const router = express.Router();
 const db = require("./db");
 const crypto = require("crypto");
 
-// Función para generar firma digital (Ley 19.799)
+// ===============================
+// Utilidad: firma digital
+// ===============================
 const generarFirma = (texto) => {
   return crypto.createHash("sha256").update(texto).digest("hex");
 };
 
-//
-// 🕒 Registrar asistencia (vinculada al usuario)
-router.post("/asistencia", (req, res) => {
-  const { usuario_id } = req.body; // recibimos el ID del usuario logueado
+// ======================================================
+// 1) ASISTENCIA (empleado marca asistencia)
+// ======================================================
+
+// Helper para registrar asistencia
+function registrarAsistencia(usuario_id, res) {
+  if (!usuario_id) {
+    return res.status(400).json({ error: "Falta usuario_id" });
+  }
 
   db.query(
     "SELECT nombre FROM usuarios WHERE id = ?",
     [usuario_id],
     (err, results) => {
       if (err) return res.status(500).json(err);
-      if (results.length === 0)
+      if (results.length === 0) {
         return res.status(404).json({ error: "Usuario no encontrado" });
+      }
 
       const empleado = results[0].nombre;
 
       db.query(
-        "INSERT INTO asistencia (usuario_id, empleado, fecha) VALUES (?, ?, CURDATE())",
+        "INSERT INTO asistencia (usuario_id, empleado, fecha, hora) VALUES (?, ?, CURDATE(), CURTIME())",
         [usuario_id, empleado],
         (err2, result) => {
           if (err2) return res.status(500).json(err2);
+
           res.json({
-            mensaje: `✅ Asistencia registrada correctamente para ${empleado}`,
+            mensaje: "Asistencia registrada correctamente",
+            empleado,
             id: result.insertId,
           });
         }
       );
     }
   );
+}
+
+// POST /rrhh/asistencia/marcar
+router.post("/asistencia/marcar", (req, res) => {
+  const { usuario_id } = req.body;
+  registrarAsistencia(usuario_id, res);
 });
-//
-// 📋 1.2️⃣ Obtener todas las asistencias (solo RRHH)
-//
+
+// Alias compatible: POST /rrhh/asistencia
+router.post("/asistencia", (req, res) => {
+  const { usuario_id } = req.body;
+  registrarAsistencia(usuario_id, res);
+});
+
+// GET /rrhh/asistencia  → listado para RRHH
 router.get("/asistencia", (req, res) => {
+  const sql = `
+    SELECT 
+      a.id,
+      u.nombre AS empleado,
+      u.email,
+      a.fecha,
+      a.hora
+    FROM asistencia a
+    JOIN usuarios u ON a.usuario_id = u.id
+    ORDER BY a.fecha DESC, a.hora DESC
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json(err);
+    res.json(results);
+  });
+});
+
+// ======================================================
+// 2) REGISTRO ASISTENCIA RRHH (horas extra + feriado NR)
+// ======================================================
+
+// POST /rrhh/registro-asistencia
+// OJO: aquí el frontend envía id_empleado = usuario_id.
+// Buscamos el id_empleado real en la tabla empleados.
+router.post("/registro-asistencia", (req, res) => {
+  const { id_empleado, fecha, horas_extras, feriado_no_renunciable } = req.body;
+
+  if (!id_empleado || !fecha) {
+    return res.status(400).json({ error: "Faltan datos obligatorios." });
+  }
+
+  // Interpretamos id_empleado como usuario_id para no romper el front
   db.query(
-    `SELECT a.id, u.nombre AS empleado, u.email, u.rol, a.fecha
-     FROM asistencia a
-     JOIN usuarios u ON a.usuario_id = u.id
-     ORDER BY a.fecha DESC`,
-    (err, results) => {
+    "SELECT id_empleado FROM empleados WHERE usuario_id = ?",
+    [id_empleado],
+    (err, rows) => {
       if (err) return res.status(500).json(err);
-      res.json(results);
+      if (rows.length === 0) {
+        return res
+          .status(404)
+          .json({ error: "No existe ficha de empleado para ese usuario." });
+      }
+
+      const idEmpleadoReal = rows[0].id_empleado;
+
+      const sql = `
+        INSERT INTO registro_asistencia (id_empleado, fecha, horas_extras, feriado_no_renunciable)
+        VALUES (?, ?, ?, ?)
+      `;
+
+      db.query(
+        sql,
+        [
+          idEmpleadoReal,
+          fecha,
+          horas_extras || 0,
+          feriado_no_renunciable ? 1 : 0,
+        ],
+        (err2) => {
+          if (err2) {
+            console.error("Error registrando horas extras:", err2);
+            return res
+              .status(500)
+              .json({ error: "Error al registrar información." });
+          }
+
+          res.json({ mensaje: "Registro ingresado correctamente." });
+        }
+      );
     }
   );
 });
 
-//
-// 🌴 2️⃣ Solicitar vacaciones (empleado)
-//
+// GET /rrhh/registro-asistencia  → listado para RRHH
+router.get("/registro-asistencia", (req, res) => {
+  const sql = `
+    SELECT 
+      r.id_registro,
+      e.id_empleado,
+      u.nombre AS empleado,
+      r.fecha,
+      r.horas_extras,
+      r.feriado_no_renunciable
+    FROM registro_asistencia r
+    JOIN empleados e ON r.id_empleado = e.id_empleado
+    JOIN usuarios u ON e.usuario_id = u.id
+    ORDER BY r.fecha DESC
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("Error obteniendo registros:", err);
+      return res.status(500).json(err);
+    }
+
+    res.json(results);
+  });
+});
+
+// ======================================================
+// 3) VACACIONES
+// ======================================================
+
+// POST /rrhh/vacaciones  → empleado solicita vacaciones
 router.post("/vacaciones", (req, res) => {
   const { usuario_id, fecha_inicio, fecha_fin } = req.body;
+
+  if (!usuario_id || !fecha_inicio || !fecha_fin) {
+    return res
+      .status(400)
+      .json({ error: "Faltan usuario_id, fecha_inicio o fecha_fin" });
+  }
 
   db.query(
     "INSERT INTO vacaciones (usuario_id, fecha_inicio, fecha_fin, estado) VALUES (?, ?, ?, 'pendiente')",
     [usuario_id, fecha_inicio, fecha_fin],
     (err, result) => {
       if (err) return res.status(500).json(err);
-      res.json({ mensaje: "✅ Solicitud enviada y en revisión", id: result.insertId });
+      res.json({
+        mensaje: "Solicitud de vacaciones enviada y en revisión",
+        id: result.insertId,
+      });
     }
   );
 });
 
-//
-// 👀 2.1️⃣ Ver todas las solicitudes (solo RRHH)
-//
-router.get("/vacaciones", (req, res) => {
-  db.query(
-    `SELECT v.id, u.nombre AS empleado, v.fecha_inicio, v.fecha_fin, v.estado
-     FROM vacaciones v
-     JOIN usuarios u ON v.usuario_id = u.id
-     ORDER BY v.fecha_inicio DESC`,
-    (err, results) => {
-      if (err) return res.status(500).json(err);
-      res.json(results);
-    }
-  );
-});
-//
-// 🌴 2.3️⃣ Ver mis propias solicitudes (empleado)
-//
-router.get("/vacaciones/usuario/:id", (req, res) => {
-  db.query(
-    `SELECT id, fecha_inicio, fecha_fin, estado
-     FROM vacaciones
-     WHERE usuario_id = ?
-     ORDER BY fecha_inicio DESC`,
-    [req.params.id],
-    (err, results) => {
-      if (err) return res.status(500).json(err);
-      res.json(results);
-    }
-  );
-});
-
-//
-// ✅ 2.2️⃣ Aprobar o rechazar vacaciones (acción RRHH)
-//
-router.put("/vacaciones/:id", (req, res) => {
-  const { estado } = req.body; // 'aprobada' o 'rechazada'
-
-  db.query(
-    "UPDATE vacaciones SET estado = ? WHERE id = ?",
-    [estado, req.params.id],
-    (err, result) => {
-      if (err) return res.status(500).json(err);
-      if (result.affectedRows === 0)
-        return res.status(404).json({ mensaje: "Solicitud no encontrada" });
-
-      res.json({ mensaje: `✅ Solicitud marcada como ${estado}` });
-    }
-  );
-});
-
-// 🌴 Solicitar vacaciones desde el panel del empleado
+// Alias: POST /rrhh/empleado/:id/vacaciones
 router.post("/empleado/:id/vacaciones", (req, res) => {
   const usuario_id = req.params.id;
   const { fecha_inicio, fecha_fin } = req.body;
@@ -134,21 +203,36 @@ router.post("/empleado/:id/vacaciones", (req, res) => {
     [usuario_id, fecha_inicio, fecha_fin],
     (err, result) => {
       if (err) {
-        console.error("❌ Error al registrar vacaciones:", err);
+        console.error("Error al registrar vacaciones:", err);
         return res.status(500).json(err);
       }
       res.json({
-        mensaje: "✅ Solicitud de vacaciones enviada correctamente",
+        mensaje: "Solicitud de vacaciones enviada correctamente",
         id: result.insertId,
       });
     }
   );
 });
 
-// 💼 Obtener todos los empleados (para mostrar en select)
-router.get("/empleados", (req, res) => {
+// GET /rrhh/vacaciones  → todas las solicitudes (RRHH)
+router.get("/vacaciones", (req, res) => {
+  const sql = `
+    SELECT v.id, u.nombre AS empleado, v.fecha_inicio, v.fecha_fin, v.estado
+    FROM vacaciones v
+    JOIN usuarios u ON v.usuario_id = u.id
+    ORDER BY v.fecha_inicio DESC
+  `;
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json(err);
+    res.json(results);
+  });
+});
+
+// GET /rrhh/vacaciones/usuario/:id → vacaciones de un usuario (panel empleado)
+router.get("/vacaciones/usuario/:id", (req, res) => {
   db.query(
-    "SELECT id, nombre, email, rol FROM usuarios WHERE rol != 'admin'",
+    "SELECT id, fecha_inicio, fecha_fin, estado FROM vacaciones WHERE usuario_id = ? ORDER BY fecha_inicio DESC",
+    [req.params.id],
     (err, results) => {
       if (err) return res.status(500).json(err);
       res.json(results);
@@ -156,40 +240,182 @@ router.get("/empleados", (req, res) => {
   );
 });
 
-//
-// 💵 3️⃣ Registrar liquidación con firma digital del empleador
-//
-router.post("/liquidaciones", (req, res) => {
-  const { empleado, sueldo_base, bono = 0, horas_extra = 0 } = req.body;
+// Alias: GET /rrhh/empleado/:id/vacaciones
+router.get("/empleado/:id/vacaciones", (req, res) => {
+  const usuarioId = req.params.id;
+  const sql = `
+    SELECT v.id, u.nombre AS empleado, v.fecha_inicio, v.fecha_fin, v.estado
+    FROM vacaciones v
+    JOIN usuarios u ON v.usuario_id = u.id
+    WHERE v.usuario_id = ?
+    ORDER BY v.fecha_inicio DESC
+  `;
+  db.query(sql, [usuarioId], (err, results) => {
+    if (err) return res.status(500).json(err);
+    res.json(results);
+  });
+});
 
-  const sueldo = parseFloat(sueldo_base);
-  const bonoExtra = parseFloat(bono);
-  const horas = parseFloat(horas_extra);
-
-  // --- Cálculos legales chilenos ---
-  const gratificacion = sueldo * 0.25; // 25% del sueldo base
-  const valorHora = sueldo / 30 / 8;
-  const pagoHorasExtra = valorHora * 1.5 * horas;
-
-  const totalBruto = sueldo + bonoExtra + gratificacion + pagoHorasExtra;
-
-  // Descuentos legales
-  const afp = totalBruto * 0.10;
-  const salud = totalBruto * 0.07;
-  const cesantia = totalBruto * 0.006;
-
-  const totalDescuentos = afp + salud + cesantia;
-  const totalLiquido = totalBruto - totalDescuentos;
-
-  // --- Firma digital del empleador (automática al generar) ---
-  const firmaEmpleador = generarFirma(`${empleado}-${Date.now()}-TICASHOP-EMPRESA`);
+// PUT /rrhh/vacaciones/:id → aprobar / rechazar
+router.put("/vacaciones/:id", (req, res) => {
+  const { estado } = req.body; // 'aprobada' o 'rechazada'
 
   db.query(
-    `INSERT INTO liquidaciones 
-      (empleado, sueldo_base, bono, horas_extra, gratificacion, afp, salud, cesantia,
-       total_bruto, total_descuentos, total_liquido, fecha, firma_empleador)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)`,
-    [
+    "UPDATE vacaciones SET estado = ? WHERE id = ?",
+    [estado, req.params.id],
+    (err, result) => {
+      if (err) return res.status(500).json(err);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ mensaje: "Solicitud no encontrada" });
+      }
+      res.json({ mensaje: `Solicitud marcada como ${estado}` });
+    }
+  );
+});
+
+// ======================================================
+// 4) EMPLEADOS (para selects en RRHH)
+// ======================================================
+
+// GET /rrhh/empleados
+// Devuelve solo usuarios que tienen ficha en empleados.
+router.get("/empleados", (req, res) => {
+  const sql = `
+    SELECT 
+      u.id,                -- este es el usuario_id (para liquidaciones, vacaciones, etc.)
+      e.id_empleado,       -- id interno de empleados (para registros legales)
+      u.nombre,
+      u.email,
+      u.rol
+    FROM empleados e
+    JOIN usuarios u ON e.usuario_id = u.id
+    ORDER BY u.nombre ASC
+  `;
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json(err);
+    res.json(results);
+  });
+});
+
+// ======================================================
+// 5) LIQUIDACIONES MANUALES (con caja + carga familiar)
+// ======================================================
+
+// POST /rrhh/liquidaciones
+router.post("/liquidaciones", (req, res) => {
+  const {
+    usuario_id, // obligatorio para saber qué empleado es
+    empleado, // nombre (para mostrar)
+    sueldo_base,
+    bono = 0,
+    horas_extra = 0,
+  } = req.body;
+
+  if (!usuario_id || !empleado || !sueldo_base) {
+    return res.status(400).json({
+      error: "Faltan datos obligatorios: usuario_id, empleado o sueldo_base.",
+    });
+  }
+
+  // Obtenemos datos laborales del empleado (caja, cargas, sueldo base real, etc.)
+  const sqlEmpleado = `
+    SELECT 
+      e.id_empleado,
+      e.tiene_carga,
+      e.sueldo_base,
+      c.porcentaje_descuento AS porcentaje_caja
+    FROM empleados e
+    LEFT JOIN cajas_compensacion c 
+      ON e.id_caja_compensacion = c.id_caja_compensacion
+    WHERE e.usuario_id = ?
+    LIMIT 1
+  `;
+
+  db.query(sqlEmpleado, [usuario_id], (err, rows) => {
+    if (err) {
+      console.error("Error consultando empleado:", err);
+      return res
+        .status(500)
+        .json({ error: "Error consultando datos del empleado." });
+    }
+
+    if (rows.length === 0) {
+      return res
+        .status(404)
+        .json({ error: "Empleado no encontrado para ese usuario_id." });
+    }
+
+    const emp = rows[0];
+
+    // Parseo de montos
+    const sueldo = parseFloat(sueldo_base) || 0;
+    const bonoExtra = parseFloat(bono) || 0;
+    const horas = parseFloat(horas_extra) || 0;
+
+    // Cálculos base
+    const gratificacion = sueldo * 0.25; // ejemplo: 25%
+    const valorHora = sueldo / 30 / 8;
+    const pagoHorasExtra = valorHora * 1.5 * horas;
+
+    const imponible = sueldo + gratificacion + pagoHorasExtra;
+
+    // Asignación familiar según tiene_carga
+    let asignacionFamiliar = 0;
+    if (emp.tiene_carga === 1) {
+      asignacionFamiliar = 22007; // monto fijo ficticio
+    }
+
+    // Caja de compensación (si tiene caja asociada)
+    let descuentoCaja = 0;
+    const porcentajeCaja = emp.porcentaje_caja
+      ? parseFloat(emp.porcentaje_caja)
+      : 0;
+
+    if (porcentajeCaja > 0) {
+      const baseCaja = sueldo + gratificacion;
+      descuentoCaja = baseCaja * (porcentajeCaja / 100);
+    }
+
+    // Haberes y descuentos
+    const totalHaberes = imponible + bonoExtra + asignacionFamiliar;
+
+    const afp = imponible * 0.1;
+    const salud = imponible * 0.07;
+    const cesantia = imponible * 0.006;
+
+    const totalDescuentos = afp + salud + cesantia + descuentoCaja;
+    const totalLiquido = totalHaberes - totalDescuentos;
+
+    const firmaEmpleador = generarFirma(
+      `${empleado}-${Date.now()}-TICASHOP-EMPRESA`
+    );
+
+    const sqlInsert = `
+      INSERT INTO liquidaciones (
+        id_empleado,
+        usuario_id,
+        empleado,
+        sueldo_base,
+        bono,
+        horas_extra,
+        gratificacion,
+        afp,
+        salud,
+        cesantia,
+        total_bruto,
+        total_descuentos,
+        total_liquido,
+        asignacion_familiar,
+        descuento_caja,
+        fecha,
+        firma_empleador
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)
+    `;
+
+    const valores = [
+      emp.id_empleado,
+      usuario_id,
       empleado,
       sueldo,
       bonoExtra,
@@ -198,51 +424,82 @@ router.post("/liquidaciones", (req, res) => {
       afp,
       salud,
       cesantia,
-      totalBruto,
+      totalHaberes,
       totalDescuentos,
       totalLiquido,
+      asignacionFamiliar,
+      descuentoCaja,
       firmaEmpleador,
-    ],
-    (err, result) => {
-      if (err) return res.status(500).json(err);
+    ];
+
+    db.query(sqlInsert, valores, (err2, result) => {
+      if (err2) {
+        console.error("Error al generar liquidación manual:", err2);
+        return res
+          .status(500)
+          .json({ error: "Error al generar la liquidación." });
+      }
+
       res.json({
-        mensaje: "✅ Liquidación generada con firma del empleador",
+        mensaje:
+          "Liquidación generada correctamente (con carga familiar y caja según BD).",
         id: result.insertId,
         empleado,
-        totalLiquido,
+        sueldo_base: sueldo,
+        gratificacion,
+        asignacion_familiar: asignacionFamiliar,
+        descuento_caja: descuentoCaja,
+        afp,
+        salud,
+        cesantia,
+        total_bruto: totalHaberes,
+        total_descuentos: totalDescuentos,
+        total_liquido: totalLiquido,
         firmaEmpleador,
       });
-    }
-  );
+    });
+  });
 });
 
-//
-// ✍️ 4️⃣ Firma digital del empleado (acción manual)
-//
+// ======================================================
+// 6) FIRMAR LIQUIDACIÓN (empleado)
+// ======================================================
+
+// PUT /rrhh/firmar/:id
 router.put("/firmar/:id", (req, res) => {
   const { empleadoEmail } = req.body;
 
-  const firmaEmpleado = generarFirma(`${empleadoEmail}-${Date.now()}-FIRMA-TRABAJADOR`);
+  if (!empleadoEmail) {
+    return res.status(400).json({ error: "Falta empleadoEmail" });
+  }
+
+  const firmaEmpleado = generarFirma(
+    `${empleadoEmail}-${Date.now()}-FIRMA-TRABAJADOR`
+  );
 
   db.query(
     "UPDATE liquidaciones SET firma_empleado = ?, fecha_firma = NOW() WHERE id = ?",
     [firmaEmpleado, req.params.id],
     (err, result) => {
       if (err) return res.status(500).json(err);
-      if (result.affectedRows === 0)
+      if (result.affectedRows === 0) {
         return res.status(404).json({ mensaje: "Liquidación no encontrada" });
+      }
 
       res.json({
-        mensaje: "✅ Liquidación firmada digitalmente por el empleado",
+        mensaje: "Liquidación firmada digitalmente por el empleado",
         firmaEmpleado,
         fecha: new Date(),
       });
     }
   );
 });
-//
-// 📋 Obtener liquidaciones de un empleado
-//
+
+// ======================================================
+// 7) HISTORIALES DE LIQUIDACIONES
+// ======================================================
+
+// GET /rrhh/empleado/:id/liquidaciones
 router.get("/empleado/:id/liquidaciones", (req, res) => {
   db.query(
     "SELECT * FROM liquidaciones WHERE usuario_id = ? ORDER BY fecha DESC",
@@ -254,175 +511,27 @@ router.get("/empleado/:id/liquidaciones", (req, res) => {
   );
 });
 
-//
-// 🌴 Obtener solicitudes de vacaciones del empleado
-//
-router.get("/empleado/:id/vacaciones", (req, res) => {
-  db.query(
-    "SELECT * FROM vacaciones WHERE usuario_id = ? ORDER BY fecha_inicio DESC",
-    [req.params.id],
-    (err, results) => {
-      if (err) return res.status(500).json(err);
-      res.json(results);
-    }
-  );
-});
-
-//
-// 🌴 Enviar nueva solicitud de vacaciones (desde empleado)
-//
-router.post("/empleado/:id/vacaciones", (req, res) => {
-  const { fecha_inicio, fecha_fin } = req.body;
-  db.query(
-    "INSERT INTO vacaciones (usuario_id, fecha_inicio, fecha_fin, estado) VALUES (?, ?, ?, 'Pendiente')",
-    [req.params.id, fecha_inicio, fecha_fin],
-    (err, result) => {
-      if (err) return res.status(500).json(err);
-      res.json({ mensaje: "Solicitud de vacaciones enviada", id: result.insertId });
-    }
-  );
-});
-
-
-
-// 📋 Obtener todas las liquidaciones (solo RRHH o para ver histórico)
+// GET /rrhh/liquidaciones  → todas (para RRHH)
 router.get("/liquidaciones", (req, res) => {
-  db.query(
-    `SELECT id, empleado, sueldo_base, total_liquido, fecha, firma_empleador, firma_empleado
-     FROM liquidaciones
-     ORDER BY fecha DESC`,
-    (err, results) => {
-      if (err) return res.status(500).json(err);
-      res.json(results);
-    }
-  );
-});
-
-// 📋 Obtener las vacaciones de un empleado específico
-router.get("/empleado/:id/vacaciones", (req, res) => {
-  const usuarioId = req.params.id;
-  db.query(
-    `SELECT v.id, u.nombre AS empleado, v.fecha_inicio, v.fecha_fin, v.estado
-     FROM vacaciones v
-     JOIN usuarios u ON v.usuario_id = u.id
-     WHERE v.usuario_id = ?`,
-    [usuarioId],
-    (err, results) => {
-      if (err) return res.status(500).json(err);
-      res.json(results);
-    }
-  );
-});
-
-
-
-// ===============================================
-// GENERAR LIQUIDACIONES AUTOMÁTICAS DESDE VENTAS
-// ===============================================
-
-router.post("/generar-liquidaciones", (req, res) => {
-
-  const sql = `
-    INSERT INTO liquidaciones (
-        id_empleado, 
-        empleado, 
-        sueldo_base, 
-        total_ventas, 
-        comision, 
-        total_bruto, 
-        total_liquido, 
-        tipo_liquidacion, 
-        fecha
-    )
-    SELECT 
-        e.id_empleado,
-        u.nombre AS empleado,
-        e.sueldo_base,
-        SUM(v.monto) AS total_ventas,
-        CASE 
-            WHEN SUM(v.monto) <= (
-                SELECT rango_max FROM reglas_comision WHERE id_regla = 1
-            ) THEN SUM(v.monto) * (
-                SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 1
-            )
-            ELSE SUM(v.monto) * (
-                SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 2
-            )
-        END AS comision,
-        e.sueldo_base +
-            CASE 
-                WHEN SUM(v.monto) <= (
-                    SELECT rango_max FROM reglas_comision WHERE id_regla = 1
-                ) THEN SUM(v.monto) * (
-                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 1
-                )
-                ELSE SUM(v.monto) * (
-                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 2
-                )
-            END AS total_bruto,
-        e.sueldo_base +
-            CASE 
-                WHEN SUM(v.monto) <= (
-                    SELECT rango_max FROM reglas_comision WHERE id_regla = 1
-                ) THEN SUM(v.monto) * (
-                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 1
-                )
-                ELSE SUM(v.monto) * (
-                    SELECT porcentaje / 100 FROM reglas_comision WHERE id_regla = 2
-                )
-            END AS total_liquido,
-        'vendedor',
-        CURDATE()
-    FROM empleados e
-    JOIN usuarios u ON u.id = e.usuario_id
-    JOIN ventas v ON e.id_empleado = v.id_empleado
-    WHERE e.tipo_vendedor IS NOT NULL
-    GROUP BY e.id_empleado;
-  `;
-
-  db.query(sql, (err, result) => {
-    if (err) {
-      console.error("Error generando liquidaciones:", err);
-      return res.status(500).json({ error: "Ocurrió un error al generar las liquidaciones." });
-    }
-
-    return res.status(200).json({
-      message: "Liquidaciones generadas correctamente desde ventas."
-    });
-  });
-});
-
-
-// ===========================================
-// OBTENER TODAS LAS LIQUIDACIONES
-// ===========================================
-
-router.get("/liquidaciones", (req, res) => {
-
   const sql = `
     SELECT 
-      id, 
-      empleado, 
-      tipo_liquidacion, 
-      sueldo_base, 
-      total_ventas, 
-      comision, 
-      total_liquido, 
-      fecha
+      id,
+      empleado,
+      sueldo_base,
+      total_liquido,
+      fecha,
+      firma_empleador,
+      firma_empleado,
+      asignacion_familiar,
+      descuento_caja
     FROM liquidaciones
     ORDER BY fecha DESC
   `;
-
   db.query(sql, (err, results) => {
-    if (err) {
-      console.error("Error obteniendo liquidaciones:", err);
-      return res.status(500).json(err);
-    }
-
+    if (err) return res.status(500).json(err);
     res.json(results);
   });
 });
 
-
-
 module.exports = router;
+
