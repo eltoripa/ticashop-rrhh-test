@@ -50,7 +50,8 @@ export default function Ventas() {
         <select value={idEmpleado} onChange={(e) => setIdEmpleado(e.target.value)}>
           <option value="">-- Seleccione --</option>
           {vendedores.map(v => (
-            <option key={v.id} value={v.id}>
+            <option key={v.id_empleado} value={v.id_empleado}>
+
               {v.nombre}
             </option>
           ))}

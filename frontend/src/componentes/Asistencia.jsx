@@ -5,23 +5,28 @@ export default function Asistencia({ empleado, rol }) {
   const [mensaje, setMensaje] = useState("");
   const [asistencias, setAsistencias] = useState([]);
 
-  //  Registrar asistencia personal
-const registrarAsistencia = async () => {
-  try {
-    const usuario = JSON.parse(localStorage.getItem("usuario"));
-    await axios.post("http://localhost:3001/rrhh/asistencia", {
-      usuario_id: usuario.id,
-    });
-    setMensaje(` Asistencia registrada correctamente para ${usuario.nombre}`);
-    cargarAsistencias();
-  } catch (error) {
-    console.error(error);
-    setMensaje(" Error al registrar asistencia");
-  }
-};
+  // ==========================
+  // EMPLEADO: MARCAR ASISTENCIA
+  // ==========================
+  const registrarAsistencia = async () => {
+    try {
+      const usuario = JSON.parse(localStorage.getItem("usuario"));
 
+      await axios.post("http://localhost:3001/rrhh/asistencia/marcar", {
+        usuario_id: usuario.id,
+      });
 
-  // 🔹 Cargar todas las asistencias (solo visible si RRHH)
+      setMensaje(`Asistencia registrada correctamente para ${usuario.nombre}`);
+      cargarAsistencias();
+    } catch (error) {
+      console.error(error);
+      setMensaje("Error al registrar asistencia");
+    }
+  };
+
+  // ==========================
+  // RRHH: CARGAR TODA LA ASISTENCIA
+  // ==========================
   const cargarAsistencias = async () => {
     try {
       const res = await axios.get("http://localhost:3001/rrhh/asistencia");
@@ -39,23 +44,29 @@ const registrarAsistencia = async () => {
 
   return (
     <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "10px" }}>
-      <h3> Registro de Asistencia</h3>
+      <h3>Registro de Asistencia</h3>
 
-      {/* RRHH y empleados pueden marcar su asistencia */}
-      <p><b>Empleado:</b> {empleado}</p>
-      <button onClick={registrarAsistencia}>Marcar asistencia</button>
-      <p>{mensaje}</p>
+      {/* SOLO empleados pueden marcar su asistencia */}
+      {rol !== "rrhh" && (
+        <>
+          <p><b>Empleado:</b> {empleado}</p>
+          <button onClick={registrarAsistencia}>Marcar asistencia</button>
+          <p>{mensaje}</p>
+        </>
+      )}
 
-      {/* Solo RRHH ve la tabla completa */}
+      {/* SOLO RRHH debe ver la tabla completa */}
       {rol === "rrhh" && (
         <div style={{ marginTop: "20px" }}>
-          <h4> Historial de Asistencias (Todos los empleados)</h4>
+          <h4>Historial de Asistencias (Todos los empleados)</h4>
           <table border="1" cellPadding="6" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th>ID</th>
                 <th>Empleado</th>
+                <th>Email</th>
                 <th>Fecha</th>
+                <th>Hora</th>
               </tr>
             </thead>
             <tbody>
@@ -63,7 +74,9 @@ const registrarAsistencia = async () => {
                 <tr key={a.id}>
                   <td>{a.id}</td>
                   <td>{a.empleado}</td>
-                  <td>{new Date(a.fecha).toLocaleDateString()}</td>
+                  <td>{a.email}</td>
+                  <td>{new Date(a.fecha).toLocaleDateString("es-CL")}</td>
+                  <td>{a.hora}</td>
                 </tr>
               ))}
             </tbody>

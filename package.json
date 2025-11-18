@@ -1,5 +1,8 @@
 {
   "dependencies": {
-    "bcrypt": "^6.0.0"
+    "axios": "^1.13.2",
+    "bcrypt": "^6.0.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.4.0"
   }
 }

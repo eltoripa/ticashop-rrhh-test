@@ -112,7 +112,7 @@ export default function RegistroAsistenciaRRHH() {
         <tbody>
           {registros.map((r) => (
             <tr key={r.id_registro}>
-              <td>{r.fecha}</td>
+              <td>{new Date(r.fecha).toLocaleDateString("es-CL")}</td>
               <td>{r.empleado}</td>
               <td>{r.horas_extras}</td>
               <td>{r.feriado_no_renunciable ? "✔️" : "❌"}</td>

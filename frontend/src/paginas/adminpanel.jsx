@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import Ventas from "../componentes/Ventas";
 
 export default function AdminPanel({ usuario }) {
   const [nombre, setNombre] = useState("");
@@ -88,7 +89,7 @@ export default function AdminPanel({ usuario }) {
           <option value="">Tipo de contrato</option>
           <option value="fijo">Fijo</option>
           <option value="indefinido">Indefinido</option>
-          <option value="part-time">Part-time</option>
+          <option value="por_horas">Part-time</option>
         </select>
 
         {rol === "vendedor" && (
@@ -122,6 +123,13 @@ export default function AdminPanel({ usuario }) {
       </button>
 
       <p>{mensaje}</p>
+      {/* ======================================= */}
+      {/*        SECCIÓN PARA REGISTRAR VENTAS     */}
+      {/* ======================================= */}
+
+      <h2 style={{ marginTop: "40px" }}>Registrar Ventas</h2>
+
+      <Ventas />  {/* ← AQUÍ SE MUESTRA EL FORMULARIO DE VENTAS */}
     </div>
   );
 }
