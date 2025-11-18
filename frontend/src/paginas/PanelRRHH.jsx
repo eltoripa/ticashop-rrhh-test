@@ -35,7 +35,7 @@ export default function PanelRRHH({ usuario }) {
       </section>
 
       <section>
-        <h2>📘 Registro Asistencia Legal</h2>
+        <h2> Registro Asistencia Legal</h2>
         <RegistroAsistenciaRRHH />
       </section>
 

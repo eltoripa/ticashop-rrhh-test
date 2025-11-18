@@ -3,7 +3,6 @@ const router = express.Router();
 const db = require("./db");
 const bcrypt = require("bcrypt");
 
-// Crear usuario + empleado
 router.post("/crear-empleado", (req, res) => {
   const {
     nombre,
@@ -21,6 +20,21 @@ router.post("/crear-empleado", (req, res) => {
 
   if (!nombre || !email || !contraseña || !rol) {
     return res.status(400).json({ error: "Faltan datos obligatorios." });
+  }
+
+  // ======================================
+  // VALIDACIÓN REAL DE SUELDO BASE
+  // ======================================
+  const sueldoNum = Number(sueldo_base);
+
+  if (isNaN(sueldoNum)) {
+    return res.status(400).json({ error: "El sueldo base debe ser un número válido." });
+  }
+
+  if (sueldoNum <= 0) {
+    return res.status(400).json({
+      error: "El sueldo base debe ser mayor a 0. No se permiten sueldos negativos."
+    });
   }
 
   // 1. ENCRIPTAR CONTRASEÑA
@@ -61,7 +75,7 @@ router.post("/crear-empleado", (req, res) => {
           tipo_contrato || null,
           tipo_vendedor || null,
           zona || null,
-          sueldo_base || 0,
+          sueldoNum,                 // ← VALIDADO Y SEGURO
           tiene_carga ? 1 : 0,
           id_caja_compensacion || null
         ],
@@ -71,7 +85,6 @@ router.post("/crear-empleado", (req, res) => {
             return res.status(500).json({ error: "Error al crear empleado." });
           }
 
-          // TODO OK
           res.json({
             mensaje: "Empleado creado correctamente",
             usuario_id
@@ -81,6 +94,7 @@ router.post("/crear-empleado", (req, res) => {
     });
   });
 });
+
 
 module.exports = router;
 

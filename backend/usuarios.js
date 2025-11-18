@@ -57,4 +57,34 @@ router.post("/login", (req, res) => {
   );
 });
 
+
+router.put("/:id/estado", (req, res) => {
+  const { activo } = req.body;
+
+  const sql = `UPDATE usuarios SET activo = ? WHERE id = ?`;
+
+  db.query(sql, [activo, req.params.id], (err) => {
+    if (err) return res.status(500).json(err);
+
+    res.json({ mensaje: "Estado de usuario actualizado" });
+  });
+});
+
+
+// ==========================================
+//  OBTENER TODOS LOS USUARIOS
+// ==========================================
+router.get("/", (req, res) => {
+  const sql = "SELECT id, nombre, email, rol, activo FROM usuarios";
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("Error al obtener usuarios:", err);
+      return res.status(500).json(err);
+    }
+
+    res.json(results);
+  });
+});
+
 module.exports = router;

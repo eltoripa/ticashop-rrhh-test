@@ -6,13 +6,27 @@ const db = require("./db");
 router.post("/", (req, res) => {
   const { id_empleado, monto } = req.body;
 
-  if (!id_empleado || !monto) {
+  // Validación mínima SIN CAMBIAR TU LÓGICA
+  if (!id_empleado || monto === undefined || monto === null) {
     return res.status(400).json({ error: "Faltan datos" });
+  }
+
+  // Convertir a número
+  const montoNum = Number(monto);
+
+  // Validar que sea número válido
+  if (isNaN(montoNum)) {
+    return res.status(400).json({ error: "Monto inválido" });
+  }
+
+  
+  if (montoNum <= 0) {
+    return res.status(400).json({ error: "Monto debe ser mayor a 0" });
   }
 
   const sql = `INSERT INTO ventas (id_empleado, monto, fecha) VALUES (?, ?, CURDATE())`;
 
-  db.query(sql, [id_empleado, monto], (err, result) => {
+  db.query(sql, [id_empleado, montoNum], (err, result) => {
     if (err) {
       console.error("Error registrando venta:", err);
       return res.status(500).json({ error: "Error al registrar venta" });

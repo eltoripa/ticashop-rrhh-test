@@ -16,23 +16,31 @@ const generarFirma = (texto) => {
 // 1) ASISTENCIA (empleado marca asistencia)
 // ======================================================
 
-// Helper para registrar asistencia
 function registrarAsistencia(usuario_id, res) {
   if (!usuario_id) {
     return res.status(400).json({ error: "Falta usuario_id" });
   }
 
+  //  1. Verificar si el usuario está activo
   db.query(
-    "SELECT nombre FROM usuarios WHERE id = ?",
+    "SELECT nombre, activo FROM usuarios WHERE id = ?",
     [usuario_id],
     (err, results) => {
       if (err) return res.status(500).json(err);
+
       if (results.length === 0) {
         return res.status(404).json({ error: "Usuario no encontrado" });
       }
 
+      if (results[0].activo === 0) {
+        return res
+          .status(403)
+          .json({ error: "Usuario desactivado — no puede registrar asistencia." });
+      }
+
       const empleado = results[0].nombre;
 
+      //  2. Registrar asistencia (solo si está activo)
       db.query(
         "INSERT INTO asistencia (usuario_id, empleado, fecha, hora) VALUES (?, ?, CURDATE(), CURTIME())",
         [usuario_id, empleado],
@@ -49,6 +57,7 @@ function registrarAsistencia(usuario_id, res) {
     }
   );
 }
+
 
 // POST /rrhh/asistencia/marcar
 router.post("/asistencia/marcar", (req, res) => {
@@ -200,21 +209,43 @@ router.post("/empleado/:id/vacaciones", (req, res) => {
     return res.status(400).json({ error: "Faltan fechas de inicio o fin" });
   }
 
+  // 🚨 1. Verificar si el usuario está activo
   db.query(
-    "INSERT INTO vacaciones (usuario_id, fecha_inicio, fecha_fin, estado) VALUES (?, ?, ?, 'pendiente')",
-    [usuario_id, fecha_inicio, fecha_fin],
-    (err, result) => {
-      if (err) {
-        console.error("Error al registrar vacaciones:", err);
-        return res.status(500).json(err);
+    "SELECT activo FROM usuarios WHERE id = ?",
+    [usuario_id],
+    (err, rows) => {
+      if (err) return res.status(500).json(err);
+
+      if (rows.length === 0) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
       }
-      res.json({
-        mensaje: "Solicitud de vacaciones enviada correctamente",
-        id: result.insertId,
-      });
+
+      if (rows[0].activo === 0) {
+        return res
+          .status(403)
+          .json({ error: "Usuario desactivado — no puede solicitar vacaciones." });
+      }
+
+      // 🚀 2. Insert de vacaciones (solo si está activo)
+      db.query(
+        "INSERT INTO vacaciones (usuario_id, fecha_inicio, fecha_fin, estado) VALUES (?, ?, ?, 'pendiente')",
+        [usuario_id, fecha_inicio, fecha_fin],
+        (err2, result) => {
+          if (err2) {
+            console.error("Error al registrar vacaciones:", err2);
+            return res.status(500).json(err2);
+          }
+
+          res.json({
+            mensaje: "Solicitud de vacaciones enviada correctamente",
+            id: result.insertId,
+          });
+        }
+      );
     }
   );
 });
+
 
 router.post("/empleado/:id/solicitar-liquidacion", (req, res) => {
   const { mes, anio } = req.body;

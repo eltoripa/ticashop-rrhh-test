@@ -54,7 +54,7 @@ export default function RegistroAsistenciaRRHH() {
 
   return (
     <div style={{ padding: "20px", background: "#eef2ff", borderRadius: "10px" }}>
-      <h2>📘 Registro Oficial de Asistencia RRHH</h2>
+      <h2>Registro Oficial de Asistencia RRHH</h2>
 
       <h3>Registrar Horas Extras / Feriado</h3>
 
