@@ -6,7 +6,7 @@ export default function Liquidaciones({ usuario }) {
   const [empleadoId, setEmpleadoId] = useState("");
   const [sueldo, setSueldo] = useState("");
   const [bono, setBono] = useState("");
-  const [horasExtra, setHorasExtra] = useState("");
+  
   const [mensaje, setMensaje] = useState("");
   const [liquidaciones, setLiquidaciones] = useState([]);
   const [mes, setMes] = useState("");
@@ -64,7 +64,7 @@ export default function Liquidaciones({ usuario }) {
   empleado: empData.nombre,
   sueldo_base: parseFloat(sueldo) || 0,
   bono: parseFloat(bono) || 0,
-  horas_extra: parseInt(horasExtra) || 0,
+  
   mes: parseInt(mes),
   anio: parseInt(anio),
 });
@@ -171,12 +171,7 @@ export default function Liquidaciones({ usuario }) {
               value={bono}
               onChange={(e) => setBono(e.target.value)}
             />
-            <input
-              type="number"
-              placeholder="Horas extra"
-              value={horasExtra}
-              onChange={(e) => setHorasExtra(e.target.value)}
-            />
+            
           </div>
 
           <button onClick={generarLiquidacion} style={{ marginTop: "10px" }}>
