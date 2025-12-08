@@ -9,14 +9,16 @@ export default function Liquidaciones({ usuario }) {
   const [horasExtra, setHorasExtra] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [liquidaciones, setLiquidaciones] = useState([]);
+  const [mes, setMes] = useState("");
+  const [anio, setAnio] = useState("");
+
+
   // Formatear números a moneda chilena
   const formatCLP = (num) => {
     return num !== null && num !== undefined
       ? num.toLocaleString("es-CL", { style: "currency", currency: "CLP" })
       : "$0";
   };
-
-
 
   // Cargar empleados
   const cargarEmpleados = async () => {
@@ -41,27 +43,32 @@ export default function Liquidaciones({ usuario }) {
   // Generar liquidación manual
   const generarLiquidacion = async () => {
     try {
-      const empData = empleados.find(e => e.id_empleado === parseInt(empleadoId));
+      if (!empleadoId) {
+        setMensaje("Debe seleccionar un empleado");
+        return;
+      }
 
-      // ==== DEBUG =====
-      console.log("DEBUG → Enviando datos al backend:", {
-        usuario_id: empData?.id,
-        id_empleado: empData?.id_empleado,
-        empleado: empData?.nombre,
-        sueldo_base: parseFloat(sueldo) || 0,
-        bono: parseFloat(bono) || 0,
-        horas_extra: parseInt(horasExtra) || 0,
-      });
-      // ================
+      const empData = empleados.find(
+        (e) => e.id_empleado === parseInt(empleadoId)
+      );
 
+      if (!empData) {
+        setMensaje("Empleado no encontrado");
+        return;
+      }
+
+      // Usamos SIEMPRE el sueldo de la BD, no el del estado
       await axios.post("http://localhost:3001/rrhh/liquidaciones", {
-        usuario_id: empData.id,
-        id_empleado: empData.id_empleado,
-        empleado: empData.nombre,
-        sueldo_base: parseFloat(sueldo) || 0,
-        bono: parseFloat(bono) || 0,
-        horas_extra: parseInt(horasExtra) || 0,
-      });
+  usuario_id: empData.id,
+  id_empleado: empData.id_empleado,
+  empleado: empData.nombre,
+  sueldo_base: parseFloat(sueldo) || 0,
+  bono: parseFloat(bono) || 0,
+  horas_extra: parseInt(horasExtra) || 0,
+  mes: parseInt(mes),
+  anio: parseInt(anio),
+});
+
 
       setMensaje(" Liquidación generada correctamente");
       cargarLiquidaciones();
@@ -71,127 +78,182 @@ export default function Liquidaciones({ usuario }) {
     }
   };
 
-
   useEffect(() => {
     cargarEmpleados();
     cargarLiquidaciones();
   }, []);
 
   return (
-    <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "10px" }}>
-
+    <div
+      style={{ padding: "20px", background: "#f8fafc", borderRadius: "10px" }}
+    >
       <h3> Generar Liquidaciones</h3>
 
-{usuario.rol === "rrhh" && (
-  <div style={{ marginBottom: "20px" }}>
+      {usuario.rol === "rrhh" && (
+        <div style={{ marginBottom: "20px" }}>
+          {/* Selección de empleado */}
+          <label>Empleado:</label>
+          <select
+            value={empleadoId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setEmpleadoId(id);
 
-    {/* Selección de empleado */}
-    <label>Empleado:</label>
-    <select
-      value={empleadoId}
-      onChange={(e) => {
-        const id = e.target.value;
-        setEmpleadoId(id);
+              // Buscar empleado seleccionado desde la respuesta del backend
+              const empSel = empleados.find(
+                (emp) => emp.id_empleado === parseInt(id)
+              );
 
-        // Buscar empleado seleccionado desde la respuesta del backend
-        const empSel = empleados.find(emp => emp.id_empleado === parseInt(id));
+              if (empSel) {
+                setSueldo(empSel.sueldo_base); // ← Autocompletar sueldo solo para mostrar
+              }
+            }}
+            style={{ marginLeft: "10px" }}
+          >
+            <option value="">-- Seleccione --</option>
+            {empleados.map((e) => (
+              <option key={e.id_empleado} value={e.id_empleado}>
+                {e.nombre} ({e.rol})
+              </option>
+            ))}
+          </select>
+          {/* Selección de mes */}
+<div style={{ marginTop: "10px" }}>
+  <label>Mes:</label>
+  <select
+    value={mes}
+    onChange={(e) => setMes(e.target.value)}
+    style={{ marginLeft: "10px" }}
+  >
+    <option value="">-- Seleccione --</option>
+    <option value="1">Enero</option>
+    <option value="2">Febrero</option>
+    <option value="3">Marzo</option>
+    <option value="4">Abril</option>
+    <option value="5">Mayo</option>
+    <option value="6">Junio</option>
+    <option value="7">Julio</option>
+    <option value="8">Agosto</option>
+    <option value="9">Septiembre</option>
+    <option value="10">Octubre</option>
+    <option value="11">Noviembre</option>
+    <option value="12">Diciembre</option>
+  </select>
+</div>
 
-        if (empSel) {
-          setSueldo(empSel.sueldo_base);   // ← Autocompletar sueldo
-        }
-      }}
-      style={{ marginLeft: "10px" }}
-    >
-      <option value="">-- Seleccione --</option>
-      {empleados.map((e) => (
-        <option key={e.id_empleado} value={e.id_empleado}>
-          {e.nombre} ({e.rol})
-        </option>
-      ))}
-    </select>
+{/* Selección de año */}
+<div style={{ marginTop: "10px" }}>
+  <label>Año:</label>
+  <select
+    value={anio}
+    onChange={(e) => setAnio(e.target.value)}
+    style={{ marginLeft: "10px" }}
+  >
+    <option value="">-- Seleccione --</option>
+    <option value="2024">2024</option>
+    <option value="2025">2025</option>
+  </select>
+</div>
 
-    {/* Mostramos sueldo base autocompletado */}
-    {empleadoId && (
-      <div style={{ marginTop: "10px", fontWeight: "bold" }}>
-        Sueldo Base: {formatCLP(sueldo)}
-      </div>
-    )}
 
-    {/* Inputs que sí se pueden editar */}
-    <div style={{ marginTop: "10px" }}>
-      <input
-        type="number"
-        placeholder="Bono"
-        value={bono}
-        onChange={(e) => setBono(e.target.value)}
-      />
-      <input
-        type="number"
-        placeholder="Horas extra"
-        value={horasExtra}
-        onChange={(e) => setHorasExtra(e.target.value)}
-      />
-    </div>
+          {/* Mostramos sueldo base autocompletado */}
+          {empleadoId && (
+            <div style={{ marginTop: "10px", fontWeight: "bold" }}>
+              Sueldo Base: {formatCLP(sueldo)}
+            </div>
+          )}
 
-    <button onClick={generarLiquidacion} style={{ marginTop: "10px" }}>
-      Generar Liquidación
-    </button>
+          {/* Inputs que sí se pueden editar */}
+          <div style={{ marginTop: "10px" }}>
+            <input
+              type="number"
+              placeholder="Bono"
+              value={bono}
+              onChange={(e) => setBono(e.target.value)}
+            />
+            <input
+              type="number"
+              placeholder="Horas extra"
+              value={horasExtra}
+              onChange={(e) => setHorasExtra(e.target.value)}
+            />
+          </div>
 
-    <p>{mensaje}</p>
-  </div>
-)}
+          <button onClick={generarLiquidacion} style={{ marginTop: "10px" }}>
+            Generar Liquidación
+          </button>
 
+          <p>{mensaje}</p>
+        </div>
+      )}
 
       {/* Mostrar historial */}
       <div style={{ marginTop: "20px" }}>
         <h4> Historial de Liquidaciones</h4>
 
-        <table border="1" cellPadding="6" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table
+          border="1"
+          cellPadding="6"
+          style={{ width: "100%", borderCollapse: "collapse" }}
+        >
           <thead>
-            <tr>
-              <th>ID</th>
-              <th>Empleado</th>
-              <th>Sueldo Base</th>
-              <th>Total Ventas</th>
-              <th>Comisión</th>
-              <th>Bono</th>
-              <th>Horas Extra</th>
-              <th>Gratificación</th>
-              <th>Asignación Familiar</th>
-              <th>Descuento Caja</th>
-              <th>Total Bruto</th>
-              <th>Total Descuentos</th>
-              <th>Total Líquido</th>
-              <th>Fecha</th>
-              <th>Firma Empleador</th>
-            </tr>
-          </thead>
+  <tr>
+    <th>ID</th>
+    <th>Empleado</th>
+    <th>Sueldo Base</th>              {/* Sueldo contrato */}
+    <th>Descuento Ausencias</th>      {/* Nuevo */}
+    <th>Sueldo Ajustado</th>          {/* Nuevo */}
+    <th>Total Ventas</th>
+    <th>Comisión</th>
+    <th>Bono</th>
+    <th>Horas Extra</th>
+    <th>Gratificación</th>
+    <th>Asignación Familiar</th>
+    <th>Descuento Caja</th>
+    <th>Total Bruto</th>
+    <th>Total Descuentos</th>
+    <th>Total Líquido</th>
+    <th>Fecha</th>
+    <th>Firma Empleador</th>
+  </tr>
+</thead>
+
 
           <tbody>
-            {liquidaciones.map((l) => (
-              <tr key={l.id}>
-                <td>{l.id}</td>
-                <td>{l.empleado}</td>
-                <td>${l.sueldo_base}</td>
-                <td>${l.total_ventas}</td>
-                <td>${l.comision}</td>
-                <td>${l.bono}</td>
-                <td>{l.horas_extra}</td>
-                <td>${l.gratificacion}</td>
-                <td>${l.asignacion_familiar}</td>
-                <td>${l.descuento_caja}</td>
-                <td>${l.total_bruto}</td>
-                <td>${l.total_descuentos}</td>
-                <td>${l.total_liquido}</td>
-                <td>{new Date(l.fecha).toLocaleDateString("es-CL")}</td>
-                <td>{l.firma_empleador ? "SI" : "NO"}</td>
-              </tr>
-            ))}
-          </tbody>
+  {liquidaciones.map((l) => (
+    <tr key={l.id}>
+      <td>{l.id}</td>
+      <td>{l.empleado}</td>
+
+      {/* Sueldo contractual */}
+      <td>{formatCLP(l.sueldo_base)}</td>
+
+      {/* Nuevos campos recién agregados a BD */}
+      <td>{formatCLP(l.descuento_ausencias)}</td>
+      <td>{formatCLP(l.sueldo_ajustado)}</td>
+
+      {/* Cálculos normales */}
+      <td>{formatCLP(l.total_ventas)}</td>
+      <td>{formatCLP(l.comision)}</td>
+      <td>{formatCLP(l.bono)}</td>
+      <td>{l.horas_extra}</td>
+      <td>{formatCLP(l.gratificacion)}</td>
+      <td>{formatCLP(l.asignacion_familiar)}</td>
+      <td>{formatCLP(l.descuento_caja)}</td>
+      <td>{formatCLP(l.total_bruto)}</td>
+      <td>{formatCLP(l.total_descuentos)}</td>
+      <td>{formatCLP(l.total_liquido)}</td>
+
+      <td>{new Date(l.fecha).toLocaleDateString("es-CL")}</td>
+      <td>{l.firma_empleador ? "SI" : "NO"}</td>
+    </tr>
+  ))}
+</tbody>
 
         </table>
       </div>
     </div>
   );
 }
+
 

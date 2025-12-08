@@ -6,7 +6,7 @@ const axios = require("axios");
 
 
 // ===============================
-// Utilidad: firma digital
+//  firma digital
 // ===============================
 const generarFirma = (texto) => {
   return crypto.createHash("sha256").update(texto).digest("hex");
@@ -385,197 +385,282 @@ router.get("/empleados", (req, res) => {
 
 
 
-// POST /rrhh/liquidaciones
 // ======================================================
-// 5) LIQUIDACIONES MANUALES (con caja, cargas y comisión)
+// 5) LIQUIDACIONES MANUALES (con ausencias y comisiones)
 // ======================================================
 
 router.post("/liquidaciones", (req, res) => {
   const {
     usuario_id,
     empleado,
-    sueldo_base,
+    sueldo_base,    // ya no lo usamos como fuente de verdad, solo de apoyo
     bono = 0,
     horas_extra = 0,
   } = req.body;
 
-  if (!usuario_id || !empleado || !sueldo_base) {
+  if (!usuario_id || !empleado) {
     return res.status(400).json({
-      error: "Faltan datos obligatorios: usuario_id, empleado o sueldo_base.",
+      error: "Faltan datos obligatorios: usuario_id o empleado.",
     });
   }
 
-  // ===============================================
-  // 1) Obtener datos del empleado
-  // ===============================================
-  const sqlEmpleado = `
-    SELECT 
-      e.id_empleado,
-      e.tiene_carga,
-      e.sueldo_base,
-      c.porcentaje_descuento AS porcentaje_caja
-    FROM empleados e
-    LEFT JOIN cajas_compensacion c 
-      ON e.id_caja_compensacion = c.id_caja
-    WHERE e.usuario_id = ?
-    LIMIT 1
+  // ===============================
+  // 0) MES Y AÑO ACTUAL DE CÁLCULO
+  // ===============================
+  const mesActual = parseInt(req.body.mes);
+const añoActual = parseInt(req.body.anio);
+
+if (!mesActual || !añoActual) {
+  return res.status(400).json({ error: "Mes y año son obligatorios." });
+}
+
+
+  // ===============================
+  // 1) FUNCIÓN PARA DÍAS HÁBILES
+  // ===============================
+  function diasHabilesDelMes(year, month) {
+    // month: 1-12
+    let count = 0;
+    const date = new Date(year, month - 1, 1); // JS usa 0-11
+
+    while (date.getMonth() === month - 1) {
+      const dow = date.getDay(); // 0 domingo, 6 sábado
+      if (dow !== 0 && dow !== 6) {
+        count++;
+      }
+      date.setDate(date.getDate() + 1);
+    }
+    return count;
+  }
+
+  const diasHabiles = diasHabilesDelMes(añoActual, mesActual);
+
+  // ===============================
+  // 2) CONTAR DÍAS ASISTIDOS
+  // ===============================
+  const sqlAsistencia = `
+    SELECT COUNT(DISTINCT fecha) AS dias_asistidos
+    FROM asistencia
+    WHERE usuario_id = ?
+      AND MONTH(fecha) = ?
+      AND YEAR(fecha) = ?
   `;
 
-  db.query(sqlEmpleado, [usuario_id], (err, rows) => {
-    if (err) {
-      console.error("Error consultando empleado:", err);
-      return res.status(500).json({ error: "Error consultando empleado." });
+  db.query(sqlAsistencia, [usuario_id, mesActual, añoActual], (errAsis, rowsAsis) => {
+    if (errAsis) {
+      console.error("Error obteniendo asistencia:", errAsis);
+      return res.status(500).json({ error: "Error obteniendo asistencia." });
     }
 
-    if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ error: "No existe ficha laboral para ese usuario." });
-    }
+    const diasAsistidos = rowsAsis[0]?.dias_asistidos || 0;
+    let ausencias = diasHabiles - diasAsistidos;
+    if (ausencias < 0) ausencias = 0; // por si hay más registros de los esperados
 
-    const emp = rows[0];
-
-    // ===============================================
-    // 2) Calcular total de ventas del empleado
-    // ===============================================
-    const sqlVentas = `
-      SELECT SUM(monto) AS total_ventas
-      FROM ventas
-      WHERE id_empleado = ?
+    // ===============================
+    // 3) OBTENER FICHA DEL EMPLEADO
+    // ===============================
+    const sqlEmpleado = `
+      SELECT 
+        e.id_empleado,
+        e.tiene_carga,
+        e.sueldo_base,
+        c.porcentaje_descuento AS porcentaje_caja
+      FROM empleados e
+      LEFT JOIN cajas_compensacion c 
+        ON e.id_caja_compensacion = c.id_caja
+      WHERE e.usuario_id = ?
+      LIMIT 1
     `;
 
-    db.query(sqlVentas, [emp.id_empleado], (errVentas, resultVentas) => {
-      if (errVentas) {
-        console.error("Error obteniendo ventas:", errVentas);
-        return res.status(500).json({ error: "Error obteniendo ventas." });
+    db.query(sqlEmpleado, [usuario_id], (errEmp, rowsEmp) => {
+      if (errEmp) {
+        console.error("Error consultando empleado:", errEmp);
+        return res.status(500).json({ error: "Error consultando empleado." });
       }
 
-      const totalVentas = resultVentas[0].total_ventas || 0;
+      if (rowsEmp.length === 0) {
+        return res
+          .status(404)
+          .json({ error: "No existe ficha laboral para ese usuario." });
+      }
 
-      // ===============================================
-      // 3) Obtener regla de comisión según las ventas
-      // ===============================================
-      const sqlRegla = `
-        SELECT porcentaje
-        FROM reglas_comision
-        WHERE ? BETWEEN rango_min AND rango_max
-        LIMIT 1
+      const emp = rowsEmp[0];
+
+      // Sueldo base REAL desde la ficha
+      const sueldoBaseOriginal = parseFloat(emp.sueldo_base) || 0;
+
+      // ===============================
+      // 4) DESCUENTO POR AUSENCIAS
+      // ===============================
+      const valorDia = sueldoBaseOriginal / 30;
+      const descuentoAusencias = valorDia * ausencias;
+      const sueldoAjustado = Math.max(sueldoBaseOriginal - descuentoAusencias, 0);
+
+      // ===============================
+      // 5) OBTENER TOTAL DE VENTAS
+      // ===============================
+      const sqlVentas = `
+        SELECT SUM(monto) AS total_ventas
+        FROM ventas
+        WHERE id_empleado = ?
       `;
 
-      db.query(sqlRegla, [totalVentas], (errRegla, reglaRows) => {
-        if (errRegla) {
-          console.error("Error leyendo regla de comisión:", errRegla);
-          return res
-            .status(500)
-            .json({ error: "Error leyendo regla de comisión." });
+      db.query(sqlVentas, [emp.id_empleado], (errVentas, resultVentas) => {
+        if (errVentas) {
+          console.error("Error obteniendo ventas:", errVentas);
+          return res.status(500).json({ error: "Error obteniendo ventas." });
         }
 
-        const porcentajeComision =
-          reglaRows.length > 0 ? reglaRows[0].porcentaje : 0;
+        const totalVentas = resultVentas[0].total_ventas || 0;
 
-        const comisionCalculada = totalVentas * porcentajeComision;
-
-        // ===============================================
-        // 4) Cálculos de liquidación
-        // ===============================================
-        const sueldo = parseFloat(sueldo_base) || 0;
-        const bonoExtra = parseFloat(bono) || 0;
-        const horas = parseFloat(horas_extra) || 0;
-
-        const gratificacion = sueldo * 0.25;
-        const valorHora = sueldo / 30 / 8;
-        const pagoHorasExtra = valorHora * 1.5 * horas;
-
-        const imponible =
-          sueldo + gratificacion + pagoHorasExtra + comisionCalculada;
-
-        let asignacionFamiliar = 0;
-        if (emp.tiene_carga === 1) asignacionFamiliar = 22007;
-
-        let descuentoCaja = 0;
-        const porcentajeCaja = emp.porcentaje_caja
-          ? parseFloat(emp.porcentaje_caja)
-          : 0;
-
-        if (porcentajeCaja > 0) {
-          descuentoCaja = (sueldo + gratificacion) * (porcentajeCaja / 100);
-        }
-
-        const totalHaberes = imponible + bonoExtra + asignacionFamiliar;
-
-        const afp = imponible * 0.1;
-        const salud = imponible * 0.07;
-        const cesantia = imponible * 0.006;
-
-        const totalDescuentos = afp + salud + cesantia + descuentoCaja;
-        const totalLiquido = totalHaberes - totalDescuentos;
-
-        const firmaEmpleador = generarFirma(
-          `${empleado}-${Date.now()}-TICASHOP-EMPRESA`
-        );
-
-        // ===============================================
-        // 5) INSERT COMPLETO alineado a tu tabla
-        // ===============================================
-        const sqlInsert = `
-          INSERT INTO liquidaciones (
-            usuario_id,
-            empleado,
-            tipo_liquidacion,
-            sueldo_base,
-            total_ventas,
-            comision,
-            bono,
-            horas_extra,
-            gratificacion,
-            afp,
-            salud,
-            cesantia,
-            total_bruto,
-            total_descuentos,
-            total_liquido,
-            asignacion_familiar,
-            descuento_caja,
-            fecha,
-            firma_empleador,
-            id_empleado
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?)
+        // ===============================
+        // 6) OBTENER REGLA DE COMISIÓN
+        // ===============================
+        const sqlRegla = `
+          SELECT porcentaje
+          FROM reglas_comision
+          WHERE ? BETWEEN rango_min AND rango_max
+          LIMIT 1
         `;
 
-        const valores = [
-          usuario_id,
-          empleado,
-          "vendedor", // tipo_liquidacion
-          sueldo,
-          totalVentas,
-          comisionCalculada,
-          bonoExtra,
-          horas,
-          gratificacion,
-          afp,
-          salud,
-          cesantia,
-          totalHaberes,
-          totalDescuentos,
-          totalLiquido,
-          asignacionFamiliar,
-          descuentoCaja,
-          firmaEmpleador,
-          emp.id_empleado,
-        ];
-
-        db.query(sqlInsert, valores, (err2, result) => {
-          if (err2) {
-            console.error("Error al generar liquidación:", err2);
+        db.query(sqlRegla, [totalVentas], (errRegla, reglaRows) => {
+          if (errRegla) {
+            console.error("Error leyendo regla de comisión:", errRegla);
             return res
               .status(500)
-              .json({ error: "Error al generar la liquidación." });
+              .json({ error: "Error leyendo regla de comisión." });
           }
 
-          res.json({
-            mensaje: "Liquidación generada correctamente.",
-            id: result.insertId,
+          const porcentajeComision =
+            reglaRows.length > 0 ? reglaRows[0].porcentaje : 0;
+
+          const comisionCalculada = totalVentas * porcentajeComision;
+
+          // ===============================
+          // 7) CÁLCULOS DE LIQUIDACIÓN
+          // ===============================
+
+          const bonoExtra = parseFloat(bono) || 0;
+          const horas = parseFloat(horas_extra) || 0;
+
+          // Gratificación sobre sueldo ajustado (descontado por ausencias)
+          const gratificacion = sueldoAjustado * 0.25;
+
+          // Horas extra
+          const valorHora = sueldoAjustado / 30 / 8;
+          const pagoHorasExtra = valorHora * 1.5 * horas;
+
+          // Imponible
+          const imponible =
+            sueldoAjustado + gratificacion + pagoHorasExtra + comisionCalculada;
+
+          // Asignación familiar
+          let asignacionFamiliar = 0;
+          if (emp.tiene_carga === 1) asignacionFamiliar = 22007;
+
+          // Descuento caja compensación
+          let descuentoCaja = 0;
+          const porcentajeCaja = emp.porcentaje_caja
+            ? parseFloat(emp.porcentaje_caja)
+            : 0;
+
+          if (porcentajeCaja > 0) {
+            descuentoCaja =
+              (sueldoAjustado + gratificacion) * (porcentajeCaja / 100);
+          }
+
+          // Total haberes
+          const totalHaberes = imponible + bonoExtra + asignacionFamiliar;
+
+          // Descuentos legales
+          const afp = imponible * 0.1;
+          const salud = imponible * 0.07;
+          const cesantia = imponible * 0.006;
+
+          const totalDescuentos = afp + salud + cesantia + descuentoCaja;
+          const totalLiquido = totalHaberes - totalDescuentos;
+
+          // Firma empleador (tu helper existente)
+          const firmaEmpleador = generarFirma(
+            `${empleado}-${Date.now()}-TICASHOP-EMPRESA`
+          );
+
+          // ===============================
+          // 8) INSERT EN TABLA LIQUIDACIONES
+          // ===============================
+
+          const sqlInsert = `
+  INSERT INTO liquidaciones (
+    usuario_id,
+    empleado,
+    tipo_liquidacion,
+    sueldo_base,
+    total_ventas,
+    comision,
+    bono,
+    horas_extra,
+    gratificacion,
+    afp,
+    salud,
+    cesantia,
+    total_bruto,
+    total_descuentos,
+    total_liquido,
+    asignacion_familiar,
+    descuento_caja,
+    fecha,
+    firma_empleador,
+    id_empleado,
+    sueldo_ajustado,
+    descuento_ausencias
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?)
+`;
+
+const valores = [
+  usuario_id,
+  empleado,
+  "vendedor",
+  sueldoBaseOriginal,  // ← sueldo real
+  totalVentas,
+  comisionCalculada,
+  bonoExtra,
+  horas,
+  gratificacion,
+  afp,
+  salud,
+  cesantia,
+  totalHaberes,
+  totalDescuentos,
+  totalLiquido,
+  asignacionFamiliar,
+  descuentoCaja,
+  firmaEmpleador,
+  emp.id_empleado,
+  sueldoAjustado,        // ← nuevo
+  descuentoAusencias     // ← nuevo
+];
+
+
+          db.query(sqlInsert, valores, (err2, result) => {
+            if (err2) {
+              console.error("Error al generar liquidación:", err2);
+              return res
+                .status(500)
+                .json({ error: "Error al generar la liquidación." });
+            }
+
+            res.json({
+              mensaje:
+                "Liquidación generada correctamente con ajuste por ausencias.",
+              id: result.insertId,
+              resumen_asistencia: {
+                dias_habiles: diasHabiles,
+                dias_asistidos: diasAsistidos,
+                ausencias,
+                descuento_ausencias: descuentoAusencias,
+              },
+            });
           });
         });
       });
@@ -634,33 +719,45 @@ router.get("/empleado/:id/liquidaciones", (req, res) => {
   );
 });
 
-// GET /rrhh/liquidaciones  → todas (para RRHH)
+// ======================================================
+// LISTAR LIQUIDACIONES (incluye sueldo_ajustado + descuento_ausencias)
+// ======================================================
 router.get("/liquidaciones", (req, res) => {
   const sql = `
-    SELECT
+    SELECT 
       id,
+      usuario_id,
       empleado,
+      tipo_liquidacion,
       sueldo_base,
       total_ventas,
       comision,
       bono,
       horas_extra,
       gratificacion,
+      afp,
+      salud,
+      cesantia,
       total_bruto,
       total_descuentos,
       total_liquido,
       asignacion_familiar,
       descuento_caja,
       fecha,
-      firma_empleador
+      firma_empleador,
+      id_empleado,
+      sueldo_ajustado,        -- NUEVO
+      descuento_ausencias     -- NUEVO
     FROM liquidaciones
     ORDER BY fecha DESC
   `;
+
   db.query(sql, (err, results) => {
     if (err) return res.status(500).json(err);
     res.json(results);
   });
 });
+
 
 module.exports = router;
 
