@@ -129,7 +129,7 @@ export default function AdminPanel({ usuario }) {
         />
 
         <select value={rol} onChange={(e) => setRol(e.target.value)}>
-          <option value="cliente">Empleado</option>
+          <option value="empleado">Empleado</option>
           <option value="rrhh">RRHH</option>
           <option value="vendedor">Vendedor</option>
           <option value="admin">Admin</option>

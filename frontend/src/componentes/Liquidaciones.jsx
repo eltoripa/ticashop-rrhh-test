@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
+
 export default function Liquidaciones({ usuario }) {
   const [empleados, setEmpleados] = useState([]);
   const [empleadoId, setEmpleadoId] = useState("");
@@ -81,7 +82,23 @@ export default function Liquidaciones({ usuario }) {
   useEffect(() => {
     cargarEmpleados();
     cargarLiquidaciones();
-  }, []);
+    // Ver si venimos desde el módulo de solicitud
+  const predata = JSON.parse(localStorage.getItem("liq_predata"));
+  if (predata) {
+    setEmpleadoId(predata.id_empleado);
+    setSueldo(predata.sueldo_base);  // Ojo: cargarás desde empleados
+    setMes(predata.mes);
+    setAnio(predata.anio);
+
+    // Para forzar que el sueldo se autollenara correctamente:
+    const emp = empleados.find(e => e.id_empleado === predata.id_empleado);
+    if (emp) setSueldo(emp.sueldo_base);
+
+    // Una vez cargado, limpiamos para evitar que se repita
+    localStorage.removeItem("liq_predata");
+  }
+}, []);
+  
 
   return (
     <div
@@ -90,97 +107,96 @@ export default function Liquidaciones({ usuario }) {
       <h3> Generar Liquidaciones</h3>
 
       {usuario.rol === "rrhh" && (
-        <div style={{ marginBottom: "20px" }}>
-          {/* Selección de empleado */}
-          <label>Empleado:</label>
-          <select
-            value={empleadoId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setEmpleadoId(id);
+  <div style={{ marginBottom: "20px" }}>
 
-              // Buscar empleado seleccionado desde la respuesta del backend
-              const empSel = empleados.find(
-                (emp) => emp.id_empleado === parseInt(id)
-              );
+    {/* Selección de empleado */}
+    <label>Empleado:</label>
+    <select
+      value={empleadoId}
+      onChange={(e) => {
+        const id = e.target.value;
+        setEmpleadoId(id);
 
-              if (empSel) {
-                setSueldo(empSel.sueldo_base); // ← Autocompletar sueldo solo para mostrar
-              }
-            }}
-            style={{ marginLeft: "10px" }}
-          >
-            <option value="">-- Seleccione --</option>
-            {empleados.map((e) => (
-              <option key={e.id_empleado} value={e.id_empleado}>
-                {e.nombre} ({e.rol})
-              </option>
-            ))}
-          </select>
-          {/* Selección de mes */}
-<div style={{ marginTop: "10px" }}>
-  <label>Mes:</label>
-  <select
-    value={mes}
-    onChange={(e) => setMes(e.target.value)}
-    style={{ marginLeft: "10px" }}
-  >
-    <option value="">-- Seleccione --</option>
-    <option value="1">Enero</option>
-    <option value="2">Febrero</option>
-    <option value="3">Marzo</option>
-    <option value="4">Abril</option>
-    <option value="5">Mayo</option>
-    <option value="6">Junio</option>
-    <option value="7">Julio</option>
-    <option value="8">Agosto</option>
-    <option value="9">Septiembre</option>
-    <option value="10">Octubre</option>
-    <option value="11">Noviembre</option>
-    <option value="12">Diciembre</option>
-  </select>
-</div>
+        const empSel = empleados.find(emp => emp.id_empleado === parseInt(id));
 
-{/* Selección de año */}
-<div style={{ marginTop: "10px" }}>
-  <label>Año:</label>
-  <select
-    value={anio}
-    onChange={(e) => setAnio(e.target.value)}
-    style={{ marginLeft: "10px" }}
-  >
-    <option value="">-- Seleccione --</option>
-    <option value="2024">2024</option>
-    <option value="2025">2025</option>
-  </select>
-</div>
+        if (empSel) {
+          setSueldo(empSel.sueldo_base); // Autocompletar sueldo
+        }
+      }}
+      style={{ marginLeft: "10px" }}
+    >
+      <option value="">-- Seleccione --</option>
+      {empleados.map((e) => (
+        <option key={e.id_empleado} value={e.id_empleado}>
+          {e.nombre} ({e.rol})
+        </option>
+      ))}
+    </select>
 
+    {/* Selección de mes */}
+    <div style={{ marginTop: "10px" }}>
+      <label>Mes:</label>
+      <select
+        value={mes}
+        onChange={(e) => setMes(e.target.value)}
+        style={{ marginLeft: "10px" }}
+      >
+        <option value="">-- Seleccione --</option>
+        <option value="1">Enero</option>
+        <option value="2">Febrero</option>
+        <option value="3">Marzo</option>
+        <option value="4">Abril</option>
+        <option value="5">Mayo</option>
+        <option value="6">Junio</option>
+        <option value="7">Julio</option>
+        <option value="8">Agosto</option>
+        <option value="9">Septiembre</option>
+        <option value="10">Octubre</option>
+        <option value="11">Noviembre</option>
+        <option value="12">Diciembre</option>
+      </select>
+    </div>
 
-          {/* Mostramos sueldo base autocompletado */}
-          {empleadoId && (
-            <div style={{ marginTop: "10px", fontWeight: "bold" }}>
-              Sueldo Base: {formatCLP(sueldo)}
-            </div>
-          )}
+    {/* Selección de año */}
+    <div style={{ marginTop: "10px" }}>
+      <label>Año:</label>
+      <select
+        value={anio}
+        onChange={(e) => setAnio(e.target.value)}
+        style={{ marginLeft: "10px" }}
+      >
+        <option value="">-- Seleccione --</option>
+        <option value="2024">2024</option>
+        <option value="2025">2025</option>
+      </select>
+    </div>
 
-          {/* Inputs que sí se pueden editar */}
-          <div style={{ marginTop: "10px" }}>
-            <input
-              type="number"
-              placeholder="Bono"
-              value={bono}
-              onChange={(e) => setBono(e.target.value)}
-            />
-            
-          </div>
+    {/* Sueldo base mostrado automáticamente */}
+    {empleadoId && (
+      <div style={{ marginTop: "10px", fontWeight: "bold" }}>
+        Sueldo Base: {formatCLP(sueldo)}
+      </div>
+    )}
 
-          <button onClick={generarLiquidacion} style={{ marginTop: "10px" }}>
-            Generar Liquidación
-          </button>
+    {/* Bono */}
+    <div style={{ marginTop: "10px" }}>
+      <input
+        type="number"
+        placeholder="Bono"
+        value={bono}
+        onChange={(e) => setBono(e.target.value)}
+      />
+    </div>
 
-          <p>{mensaje}</p>
-        </div>
-      )}
+    {/* Botón generar */}
+    <button onClick={generarLiquidacion} style={{ marginTop: "10px" }}>
+      Generar Liquidación
+    </button>
+
+    <p>{mensaje}</p>
+  </div>
+)}
+
 
       {/* Mostrar historial */}
       <div style={{ marginTop: "20px" }}>

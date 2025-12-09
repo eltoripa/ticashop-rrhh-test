@@ -43,23 +43,48 @@ export default function Asistencia({ empleado, rol }) {
   }, [rol]);
 
   return (
-    <div style={{ padding: "20px", background: "#f8fafc", borderRadius: "10px" }}>
-      <h3>Registro de Asistencia</h3>
+  <div
+    style={{
+      padding: "20px",
+      background: "#f8fafc",
+      borderRadius: "10px",
+    }}
+  >
+    <h3>Registro de Asistencia</h3>
 
-      {/* SOLO empleados pueden marcar su asistencia */}
-      {rol !== "rrhh" && (
-        <>
-          <p><b>Empleado:</b> {empleado}</p>
-          <button onClick={registrarAsistencia}>Marcar asistencia</button>
-          <p>{mensaje}</p>
-        </>
-      )}
+    {/* SOLO empleados pueden marcar su asistencia */}
+    {rol !== "rrhh" && (
+      <>
+        <p>
+          <b>Empleado:</b> {empleado}
+        </p>
+        <button onClick={registrarAsistencia}>Marcar asistencia</button>
+        <p>{mensaje}</p>
+      </>
+    )}
 
-      {/* SOLO RRHH debe ver la tabla completa */}
-      {rol === "rrhh" && (
-        <div style={{ marginTop: "20px" }}>
-          <h4>Historial de Asistencias (Todos los empleados)</h4>
-          <table border="1" cellPadding="6" style={{ width: "100%", borderCollapse: "collapse" }}>
+    {/* SOLO RRHH debe ver la tabla completa */}
+    {rol === "rrhh" && (
+      <div style={{ marginTop: "20px" }}>
+        <h4>Historial de Asistencias (Todos los empleados)</h4>
+
+        {/* CONTENEDOR CON SCROLL */}
+        <div
+          style={{
+            maxHeight: "350px",
+            overflowY: "auto",
+            marginTop: "10px",
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            background: "white",
+            padding: "10px",
+          }}
+        >
+          <table
+            border="1"
+            cellPadding="6"
+            style={{ width: "100%", borderCollapse: "collapse" }}
+          >
             <thead>
               <tr>
                 <th>ID</th>
@@ -82,7 +107,9 @@ export default function Asistencia({ empleado, rol }) {
             </tbody>
           </table>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
+
 }

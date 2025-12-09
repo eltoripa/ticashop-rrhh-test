@@ -22,20 +22,15 @@ export default function App() {
 
 
 
-  //  Determina qué vista mostrar según el rol
 const renderizarVistaPorRol = () => {
   switch (usuario.rol) {
+    
     case "admin":
       return <AdminPanel usuario={usuario} />;
+
     case "rrhh":
       return <PanelRRHH usuario={usuario} />;
-    case "logistica":
-      return (
-        <div>
-          <h2>Módulo de Logística</h2>
-          <p>Aquí irán las opciones de inventario.</p>
-        </div>
-      );
+
     case "cliente":
       return (
         <div>
@@ -43,11 +38,18 @@ const renderizarVistaPorRol = () => {
           <p>Bienvenido, {usuario.nombre}. Aquí podrás ver tus cotizaciones y pedidos.</p>
         </div>
       );
+
+    // TODOS LOS DEMÁS ROLES VEN EL PANEL DE EMPLEADO
+    case "logistica":
+    case "vendedor":
+    case "empleado":   // si algún día lo usas, ya está cubierto
+      return <PanelEmpleado usuario={usuario} />;
+
     default:
-      //  Todos los otros roles (vendedor, soporte, etc.) se tratan como empleados normales
       return <PanelEmpleado usuario={usuario} />;
   }
 };
+
 
   return (
     <div>

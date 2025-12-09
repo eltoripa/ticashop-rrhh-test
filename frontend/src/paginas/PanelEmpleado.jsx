@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import MarcarAsistencia from "../componentes/MarcarAsistencia";
+
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import BotonAsistencia from "../componentes/BotonAsistencia";
+import MisAsistencias from "../componentes/MisAsistencias";
 
 
 
@@ -110,12 +112,18 @@ const descargarPDF = (liq) => {
 
   return (
     <div style={{ padding: "30px" }}>
+      <p>Bienvenido, <b>{usuario.nombre}</b> ({usuario.email})</p>
       <h1>Portal del Empleado</h1>
-      <section>
-  <MarcarAsistencia usuario={usuario} />
+      <section style={{ marginTop: "20px", background: "#f1f5f9", padding: "20px", borderRadius: "10px" }}>
+  <h2>Mi Asistencia</h2>
+
+  <BotonAsistencia usuario={usuario} />
+
+  <MisAsistencias usuario={usuario} />
 </section>
 
-      <p>Bienvenido, <b>{usuario.nombre}</b> ({usuario.email})</p>
+
+      
 
       <section style={{ marginTop: "20px" }}>
   <h2> Mis Liquidaciones</h2>
@@ -194,11 +202,15 @@ const descargarPDF = (liq) => {
     <hr />
 
     <h3>Haberes</h3>
-    <p><b>Sueldo Base:</b> ${liq.sueldo_base}</p>
+    <p><b>Sueldo Base (Contractual):</b> ${liq.sueldo_base}</p>
+    <p><b>Descuento por Ausencias:</b> ${liq.descuento_ausencias}</p>
+    <p><b>Sueldo Ajustado:</b> ${liq.sueldo_ajustado}</p>
+
     <p><b>Gratificación:</b> ${liq.gratificacion}</p>
     <p><b>Bono:</b> ${liq.bono}</p>
     <p><b>Horas Extra:</b> {liq.horas_extra}</p>
     <p><b>Comisión:</b> ${liq.comision}</p>
+    <p><b>Asignación Familiar:</b> ${liq.asignacion_familiar}</p>
 
     <hr />
 
@@ -216,6 +228,7 @@ const descargarPDF = (liq) => {
     <p><b>Firma Empleado:</b> {liq.firma_empleado ? "✔" : "✘"}</p>
   </div>
 ))}
+
 
 </section>
 <section style={{ marginTop: "20px" }}>

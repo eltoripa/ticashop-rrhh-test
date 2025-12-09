@@ -25,15 +25,21 @@ export default function SolicitudesLiquidaciones() {
     cargarSolicitudes();
   };
 
-  const generarLiquidacion = async (id) => {
-  await axios.put(
-    `http://localhost:3001/rrhh/solicitudes-liquidaciones/${id}/estado`,
-    { estado: "aprobada" }
-  );
+const generarLiquidacion = async (sol) => {
+  // Guardamos los datos en localStorage para que RRHH no tenga que escribir nada.
+  localStorage.setItem("liq_predata", JSON.stringify({
+    usuario_id: sol.usuario_id,
+    id_empleado: sol.id_empleado,
+    nombre: sol.nombre,
+    mes: sol.mes,
+    anio: sol.anio
+  }));
 
-  alert("Solicitud marcada como aprobada. RRHH debe generar la liquidación manualmente.");
-  cargarSolicitudes();
+  alert("Redirigiendo a Generar Liquidación...");
+  window.location.href = "/rrhh/liquidaciones"; // Ajustar según tu ruta real
 };
+
+
 
 
   useEffect(() => {
@@ -72,7 +78,7 @@ export default function SolicitudesLiquidaciones() {
               <td>
                 {s.estado === "pendiente" && (
                   <>
-                    <button onClick={() => generarLiquidacion(s.id)}>Generar</button>
+                    <button onClick={() => generarLiquidacion(s)}>Generar</button>
                     <button
                       onClick={() => rechazar(s.id)}
                       style={{ marginLeft: "5px", background: "red" }}
